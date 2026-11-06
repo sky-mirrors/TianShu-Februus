@@ -1,0 +1,186 @@
+{
+  "$schema": "disk-steward/rule@2",
+  "domain": "tianshu",
+  "rules": [
+    {
+      "id": "ts.scratch",
+      "title": "一次性探针产物（全局 scratch）",
+      "match": {
+        "kind": "prefix",
+        "path": "{{rivetHome}}/scratch"
+      },
+      "grade": "green",
+      "reason": "scratch 是约定的一次性探针区，清后不影响 knowledge/plans/memory",
+      "rebuild": "无需重建；需要时可重跑探针脚本",
+      "executor": {
+        "type": "stage"
+      }
+    },
+    {
+      "id": "ts.project-scratch",
+      "title": "一次性探针产物（项目 scratch）",
+      "match": {
+        "kind": "prefix",
+        "path": "{{projectRivetHome}}/scratch"
+      },
+      "grade": "green",
+      "reason": "项目内 scratch 同为一次性区，清后不影响项目知识库",
+      "rebuild": "无需重建",
+      "executor": {
+        "type": "stage"
+      }
+    },
+    {
+      "id": "ts.tmp",
+      "title": "临时工作文件（~/.rivet/tmp）",
+      "match": {
+        "kind": "prefix",
+        "path": "{{rivetHome}}/tmp"
+      },
+      "grade": "green",
+      "reason": "宿主临时工作区，内含一次性下载/中间产物",
+      "rebuild": "需要时重新下载",
+      "executor": {
+        "type": "stage"
+      }
+    },
+    {
+      "id": "ts.cache",
+      "title": "HTTP 抓取缓存（全局）",
+      "match": {
+        "kind": "prefix",
+        "path": "{{rivetHome}}/cache"
+      },
+      "grade": "green",
+      "reason": "纯 HTTP 缓存，可重建",
+      "rebuild": "下次抓取时自动重建",
+      "executor": {
+        "type": "stage"
+      }
+    },
+    {
+      "id": "ts.project-cache",
+      "title": "HTTP 抓取缓存（项目）",
+      "match": {
+        "kind": "prefix",
+        "path": "{{projectRivetHome}}/cache"
+      },
+      "grade": "green",
+      "reason": "项目级 HTTP 缓存，可重建",
+      "rebuild": "下次抓取时自动重建",
+      "executor": {
+        "type": "stage"
+      }
+    },
+    {
+      "id": "ts.temp-raw",
+      "title": "工具输出原文转储",
+      "detect": {
+        "kind": "exists",
+        "path": "{{tmpDir}}/rivet-raw"
+      },
+      "match": {
+        "kind": "prefix",
+        "path": "{{tmpDir}}/rivet-raw"
+      },
+      "grade": "green",
+      "reason": "工具输出的临时转储，会话结束后不再被引用",
+      "rebuild": "无法重建（但也不再需要）",
+      "executor": {
+        "type": "stage"
+      }
+    },
+    {
+      "id": "ts.backups",
+      "title": "插件/配置备份",
+      "match": {
+        "kind": "prefix",
+        "path": "{{rivetHome}}/backups"
+      },
+      "grade": "yellow",
+      "reason": "备份是回滚用的安全网；只建议保留最近若干份",
+      "rebuild": "不可重建",
+      "sideEffect": "删掉后无法回滚到对应版本",
+      "executor": {
+        "type": "stage"
+      }
+    },
+    {
+      "id": "ts.memory-wal",
+      "title": "记忆库预写日志（WAL）",
+      "detect": {
+        "kind": "exists",
+        "path": "{{rivetHome}}/meridian.db-wal"
+      },
+      "match": {
+        "kind": "prefix",
+        "path": "{{rivetHome}}/meridian.db-wal"
+      },
+      "grade": "blue",
+      "reason": "WAL 是活数据库的一部分，只能 checkpoint 归并，不能删除",
+      "rebuild": "由 SQLite 自动维护",
+      "executor": {
+        "type": "compact"
+      }
+    },
+    {
+      "id": "ts.memory-db",
+      "title": "记忆/会话主库",
+      "detect": {
+        "kind": "exists",
+        "path": "{{rivetHome}}/meridian.db"
+      },
+      "match": {
+        "kind": "prefix",
+        "path": "{{rivetHome}}/meridian.db"
+      },
+      "grade": "brown",
+      "reason": "会话与记忆主库，删除等于失忆；只允许 VACUUM 压实"
+    },
+    {
+      "id": "ts.knowledge",
+      "title": "知识库",
+      "match": {
+        "kind": "prefix",
+        "path": "{{rivetHome}}/knowledge"
+      },
+      "grade": "brown",
+      "reason": "沉淀的知识与索引，永不自动删"
+    },
+    {
+      "id": "ts.plans",
+      "title": "计划文档",
+      "match": {
+        "kind": "prefix",
+        "path": "{{rivetHome}}/plans"
+      },
+      "grade": "brown",
+      "reason": "计划是长期资产，永不自动删"
+    },
+    {
+      "id": "ts.skills",
+      "title": "技能包",
+      "match": {
+        "kind": "prefix",
+        "path": "{{rivetHome}}/skills"
+      },
+      "grade": "brown",
+      "reason": "已安装技能，删除会失去能力"
+    },
+    {
+      "id": "ts.artifacts-graph",
+      "title": "历史产物（按引用图判定）",
+      "match": {
+        "kind": "prefix",
+        "path": "{{rivetHome}}/artifacts"
+      },
+      "expand": "refs",
+      "grade": "green",
+      "reason": "以引用图判定：被引用即保护，零引用且过冷却期才可回收",
+      "rebuild": "不可重建（需重新生成）",
+      "executor": {
+        "type": "stage"
+      }
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+# 依赖与构建产物
+node_modules/
+
+# 天枢运行时数据（记忆库 / 会话 / 产物 / 隔离区），不入库
+.rivet/
+disk-steward/.runs/
+disk-steward/.trash/
+.tmp-xvol/

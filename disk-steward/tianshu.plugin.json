@@ -1,0 +1,25 @@
+{
+  "$tpi": "1.0",
+  "kind": "tianshu.plugin",
+  "id": "disk-steward",
+  "displayName": "磁盘管家",
+  "version": "0.1.0",
+  "description": "扫描系统盘与天枢自有数据，逐项说明删什么、为什么删、不删的为什么保留；人批准后两阶段执行——先移入隔离区（可撤销），再按批次永久删除。",
+  "runtime": "agent",
+  "entry": "index.js",
+  "capabilities": ["tools"],
+  "contributes": {
+    "tools": [
+      { "name": "disk_scan", "description": "只读扫描天枢两域占用，返回 run_id 与最大若干项" },
+      { "name": "disk_status", "description": "轻量概览：磁盘可用空间、关键目录存在性与隔离区占用（含过期/超限告警）" },
+      { "name": "disk_rules", "description": "解释规则：某路径为什么被判为该分级" },
+      { "name": "disk_report", "description": "把一次扫描渲染成可归档的 Markdown 报告（全量条目 + 逐项解释）" },
+      { "name": "disk_diff", "description": "对比两次扫描的增量（变大/变小/新增/消失）" },
+      { "name": "disk_plan", "description": "把勾选项变成执行计划并签发一次性令牌（保护项/被挡项一律拒绝）" },
+      { "name": "disk_exec", "description": "执行计划：stage 移入隔离区可撤销；purge 需令牌且仅限已 staged 批次；两者都必须带 approval（用户同意执行的原话）" },
+      { "name": "disk_undo", "description": "按批次撤销 stage（依据台账反演）" }
+    ],
+    "lifecycle": []
+  },
+  "permissions": { "fs": true, "net": false, "shell": true }
+}

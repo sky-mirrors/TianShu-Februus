@@ -1,0 +1,10 @@
+{
+  "name": "disk-steward",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Tianshu plugin: auditable disk cleanup — scan, explain, human-confirmed two-phase execute, append-only ledger with undo. Manifest lives in tianshu.plugin.json (TPI 1.0).",
+  "scripts": {
+    "test": "node --test"
+  }
+}
