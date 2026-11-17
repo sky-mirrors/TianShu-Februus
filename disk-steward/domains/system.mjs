@@ -95,6 +95,65 @@ export function systemRules() {
       grade: 'brown',
       reason: '回收站由系统管理；本插件不接管（避免与资源管理器行为冲突）',
     },
+    // 用户级缓存与转储：实测这台机器上合计约 1.3 GB，都是可重建的派生数据。
+    // C:\Windows\* 下的 Installer/Logs/Prefetch 不在此列——它们会被 guard 的
+    // WINDOWS_DIR 硬禁区拦在 items 之外，加规则只会得到永不生效的死规则。
+    {
+      id: 'sys.pip-cache',
+      title: 'pip 包缓存（%LOCALAPPDATA%\\pip\\Cache）',
+      match: { kind: 'prefix', path: '{{LOCALAPPDATA}}/pip/Cache' },
+      grade: 'green',
+      reason: 'pip 下载的 wheel 缓存；只在重新安装依赖时需要重新下载',
+      rebuild: '重新安装依赖时自动重建',
+      executor: { type: 'stage' },
+    },
+    {
+      id: 'sys.crash-dumps',
+      title: '崩溃转储（%LOCALAPPDATA%\\CrashDumps）',
+      match: { kind: 'prefix', path: '{{LOCALAPPDATA}}/CrashDumps' },
+      grade: 'green',
+      reason: '应用崩溃时生成的内存转储，仅在排查那次崩溃时需要',
+      rebuild: '不可重建（历史崩溃记录）',
+      executor: { type: 'stage' },
+    },
+    {
+      id: 'sys.explorer-thumbs',
+      title: '缩略图缓存（%LOCALAPPDATA%\\Microsoft\\Windows\\Explorer）',
+      match: { kind: 'prefix', path: '{{LOCALAPPDATA}}/Microsoft/Windows/Explorer' },
+      grade: 'green',
+      reason: '资源管理器的缩略图与图标缓存，删后浏览文件时自动重建',
+      rebuild: '自动重建',
+      executor: { type: 'stage' },
+    },
+    {
+      id: 'sys.d3d-cache',
+      title: 'DirectX 着色器缓存（D3DSCache）',
+      match: { kind: 'prefix', path: '{{LOCALAPPDATA}}/D3DSCache' },
+      grade: 'green',
+      reason: '显卡着色器编译缓存，删后首次运行会重新编译（略慢一次）',
+      rebuild: '自动重建',
+      executor: { type: 'stage' },
+    },
+    {
+      id: 'sys.pnpm-store',
+      title: 'pnpm 存储（%LOCALAPPDATA%\\pnpm）',
+      match: { kind: 'prefix', path: '{{LOCALAPPDATA}}/pnpm' },
+      grade: 'green',
+      reason: 'pnpm 内容寻址包存储；删后重新安装依赖需重新下载',
+      rebuild: '重新安装依赖时重建',
+      executor: { type: 'stage' },
+    },
+    {
+      id: 'sys.npm-cache',
+      title: 'npm 缓存（%LOCALAPPDATA%\\npm-cache）',
+      match: { kind: 'prefix', path: '{{LOCALAPPDATA}}/npm-cache' },
+      // yellow 而不是 green：删后所有依赖要重新下载，离线时直接失败。
+      // 建议层会把它判成「谨慎：可清但有前提」，且清理仍需用户逐项点名。
+      grade: 'yellow',
+      reason: 'npm 内容寻址缓存（本机实测数 GB）；删后所有依赖需重新下载，离线时会失败',
+      rebuild: '重新安装依赖时重建',
+      executor: { type: 'stage' },
+    },
   ]
 }
 
