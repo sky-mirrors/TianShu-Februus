@@ -44,8 +44,9 @@ export async function sweepDrive({
    * @param {string} dir
    * @param {number} level
    * @param {Set<string>} claimed 祖先链上已命中的规则 id：同一规则只报最靠上的那一个
+   * @param {boolean} insideDenied 祖先是否已在禁区里：子树只读，不再逐项登记
    */
-  const walk = async (dir, level, claimed = new Set()) => {
+  const walk = async (dir, level, claimed = new Set(), insideDenied = false) => {
     if (level > depth) return
     if (clock() > deadline) {
       truncated = true
@@ -61,8 +62,8 @@ export async function sweepDrive({
       if (!entry.isDirectory()) continue
       if (typeof entry.isSymbolicLink === 'function' && entry.isSymbolicLink()) continue
       const path = join(dir, entry.name)
-      const visitOnly = isDeniedFn(path)
-      if (visitOnly) denied.push({ path, reason: denyReasonFn(path) })
+      const visitOnly = insideDenied || isDeniedFn(path)
+      if (visitOnly && !insideDenied) denied.push({ path, reason: denyReasonFn(path) })
       if (clock() > deadline) {
         truncated = true
         return
@@ -70,13 +71,15 @@ export async function sweepDrive({
       scanned += 1
       const rule = rules.find((r) => matchRule(path, r, vars))
       if (!rule) {
-        unmatched.push(path)
-        await walk(path, level + 1, claimed)
+        // 禁区内的未收录目录不重复登记：禁区已在最上层记过，再记一遍会让 denied 膨胀且失真
+        // （实测 C:\ 一次扫出 denied=209 而 scanned=261），也不进 unmatched。
+        if (!visitOnly) unmatched.push(path)
+        await walk(path, level + 1, claimed, visitOnly)
         continue
       }
       if (claimed.has(rule.id)) {
         // 父目录已被这条规则报过；子目录再报会把同一份数据算两遍
-        await walk(path, level + 1, claimed)
+        await walk(path, level + 1, claimed, visitOnly)
         continue
       }
       const inner = new Set(claimed).add(rule.id)
@@ -102,7 +105,7 @@ export async function sweepDrive({
         item.advice = advise(item)
         candidates.push(item)
       }
-      await walk(path, level + 1, inner)
+      await walk(path, level + 1, inner, visitOnly)
     }
   }
 

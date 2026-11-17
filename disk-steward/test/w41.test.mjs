@@ -130,3 +130,27 @@ test('W41：同一规则命中父子目录时只报父一次（避免同一份�
   assert.equal(hits.length, 1, `同一规则应只报父一次，实际 ${hits.length} 条：${hits.map((h) => h.path).join(', ')}`)
   assert.match(hits[0].path, /A$/, '报的应是父目录')
 })
+
+test('W41：禁区子树只登记最上层，且不混进 unmatched', async () => {
+  const d = (name) => ({ name, isDirectory: () => true, isSymbolicLink: () => false })
+  const tree = async (p) => {
+    if (p === 'C:\\') return [d('Win'), d('Ok')]
+    if (p === 'C:\\Win') return [d('Sub'), d('Sub2')]
+    return []
+  }
+  const res = await sweepDrive({
+    root: 'C:\\',
+    depth: 3,
+    rules: [],
+    vars: {},
+    minBytes: 0,
+    readdirFn: tree,
+    measureFn: async () => ({ bytes: 0, partial: false }),
+    isDeniedFn: (p) => /^c:\\win(\\|$)/i.test(String(p)),
+    denyReasonFn: () => 'DENIED',
+    clock: () => 0,
+  })
+  assert.equal(res.denied.length, 1, `禁区只登记最上层，实际登记了 ${res.denied.length} 条`)
+  assert.ok(!res.unmatched.some((p) => /^c:\\win/i.test(String(p))), '禁区路径不应混进 unmatched')
+  assert.ok(res.unmatched.some((p) => /ok$/i.test(String(p))), '非禁区的未收录路径照常列出')
+})
