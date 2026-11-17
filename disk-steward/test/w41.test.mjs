@@ -79,3 +79,54 @@ test('W41：预算耗尽时标记 truncated，明确「没测完」而不是当�
   })
   assert.equal(res.truncated, true)
 })
+
+test('W41：系统目录允许只读测量与遍历（看得见），但永不进执行列表（动不了）', async () => {
+  const tree = async (p) => {
+    if (p === 'C:\\') return [{ name: 'Windows', isDirectory: () => true, isSymbolicLink: () => false }]
+    if (p === 'C:\\Windows') return [{ name: 'Temp', isDirectory: () => true, isSymbolicLink: () => false }]
+    return []
+  }
+  const res = await sweepDrive({
+    root: 'C:\\',
+    depth: 2,
+    rules: [{
+      id: 'sys.win-temp', grade: 'green', match: { kind: 'prefix', path: 'C:/Windows/Temp' },
+      executor: { type: 'stage' }, reason: 'Windows 临时目录',
+    }],
+    vars: {},
+    minBytes: 0,
+    readdirFn: tree,
+    measureFn: async () => ({ bytes: 12345678, partial: false }),
+    isDeniedFn: (p) => /^c:\\windows(\\)?/i.test(String(p).replace(/\//g, '\\')),
+    denyReasonFn: () => 'WINDOWS_DIR: Windows 系统目录',
+    clock: () => 0,
+  })
+  assert.ok(res.denied.length > 0, '系统目录仍要登记为禁区（审计需要）')
+  const hit = res.candidates.find((c) => /temp$/i.test(c.path))
+  assert.ok(hit, '系统目录必须能被看见：枚举 + 测体积')
+  assert.equal(hit.executor, null, '看得见 ≠ 能执行：executor 必须为空')
+  assert.equal(hit.advice.verdict, 'keep', '建议应落在「不建议删除」')
+})
+
+test('W41：同一规则命中父子目录时只报父一次（避免同一份数据重复计数）', async () => {
+  const tree = async (p) => {
+    if (p === 'C:\\') return [{ name: 'A', isDirectory: () => true, isSymbolicLink: () => false }]
+    if (p === 'C:\\A') return [{ name: 'sub', isDirectory: () => true, isSymbolicLink: () => false }]
+    if (p === 'C:\\A\\sub') return [{ name: 'sub2', isDirectory: () => true, isSymbolicLink: () => false }]
+    return []
+  }
+  const res = await sweepDrive({
+    root: 'C:\\',
+    depth: 3,
+    rules: [{ id: 'r.a', grade: 'green', match: { kind: 'prefix', path: 'C:/A' }, executor: { type: 'stage' }, reason: '测试目录' }],
+    vars: {},
+    minBytes: 0,
+    readdirFn: tree,
+    measureFn: async () => ({ bytes: 1000, partial: false }),
+    isDeniedFn: () => false,
+    clock: () => 0,
+  })
+  const hits = res.candidates.filter((c) => c.ruleId === 'r.a')
+  assert.equal(hits.length, 1, `同一规则应只报父一次，实际 ${hits.length} 条：${hits.map((h) => h.path).join(', ')}`)
+  assert.match(hits[0].path, /A$/, '报的应是父目录')
+})

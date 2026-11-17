@@ -1,7 +1,10 @@
 // 整盘 sweep：只算顶层体积回答不了「C 盘里哪些是垃圾」。
 // 这里把盘内目录按深度递归枚举，逐个过规则库：命中规则给分级与建议，
-// 未命中的**不当作垃圾**（advice=keep、grade=null），并单独列进 unmatched 让人能补规则。
-// 禁区先挡后测；预算用尽标 truncated，不假装扫完了。
+// 未命中的**不当作垃圾**（只交出路径供补规则），并单独列进 unmatched。
+// 三条纪律：
+//  1) 先判规则再测体积——整盘递归测体积太贵（实测 45s 只测完 C 盘 9 个顶层目录）；
+//  2) 同一规则命中父子目录时只报父一次，否则同一份数据被重复计数（回收站曾报两次）；
+//  3) 禁区（C:\Windows 等）扫得到、量得准，但永不给执行器：宽的是「看得见」不是「动得了」。
 import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { measure } from './probe.mjs'
@@ -37,7 +40,12 @@ export async function sweepDrive({
   let truncated = false
   let scanned = 0
 
-  const walk = async (dir, level) => {
+  /**
+   * @param {string} dir
+   * @param {number} level
+   * @param {Set<string>} claimed 祖先链上已命中的规则 id：同一规则只报最靠上的那一个
+   */
+  const walk = async (dir, level, claimed = new Set()) => {
     if (level > depth) return
     if (clock() > deadline) {
       truncated = true
@@ -53,23 +61,25 @@ export async function sweepDrive({
       if (!entry.isDirectory()) continue
       if (typeof entry.isSymbolicLink === 'function' && entry.isSymbolicLink()) continue
       const path = join(dir, entry.name)
-      if (isDeniedFn(path)) {
-        denied.push({ path, reason: denyReasonFn(path) })
-        continue
-      }
+      const visitOnly = isDeniedFn(path)
+      if (visitOnly) denied.push({ path, reason: denyReasonFn(path) })
       if (clock() > deadline) {
         truncated = true
         return
       }
       scanned += 1
-      // 先判规则再测体积：整盘递归测体积太贵（实测 45s 只测完 C 盘 9 个顶层目录）。
-      // 未收录的目录没有依据判它是垃圾，只交出路径供补规则，不当垃圾也不白花时间去量。
       const rule = rules.find((r) => matchRule(path, r, vars))
       if (!rule) {
         unmatched.push(path)
-        await walk(path, level + 1)
+        await walk(path, level + 1, claimed)
         continue
       }
+      if (claimed.has(rule.id)) {
+        // 父目录已被这条规则报过；子目录再报会把同一份数据算两遍
+        await walk(path, level + 1, claimed)
+        continue
+      }
+      const inner = new Set(claimed).add(rule.id)
       let bytes = 0
       try {
         const m = await measureFn(path, { deadline })
@@ -85,14 +95,14 @@ export async function sweepDrive({
           bytes,
           grade: rule.grade,
           blocked: null,
-          executor: rule.executor ? rule.executor.type : null,
+          executor: visitOnly ? null : (rule.executor ? rule.executor.type : null),
           ruleId: rule.id,
           explain: rule.explain ?? { why: rule.reason },
         }
         item.advice = advise(item)
         candidates.push(item)
       }
-      await walk(path, level + 1)
+      await walk(path, level + 1, inner)
     }
   }
 
