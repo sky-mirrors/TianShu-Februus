@@ -28,8 +28,8 @@
 
 | 项 | 数值 | 怎么核 |
 |---|---|---|
-| 工具 | **8** 个 | `createTools().length`；名字见「工具面」节 |
-| 测试 | **240 用例 / 50 个文件**，全绿 | `npm test`（`scripts.test = node --test`），exit 0，约 166s |
+| 工具 | **9** 个 | `createTools().length`；名字见「工具面」节 |
+| 测试 | **247 用例 / 53 个文件**，全绿 | `npm test`（`scripts.test = node --test`），exit 0，约 184s |
 | 类型检查 | `tsc --noEmit` **exit 0** | `../node_modules/.bin/tsc --noEmit` |
 | 规则 | 天枢域 **21** 条、系统域 **35** 条 | `rules/tianshu.rules.json`、`domains/system.mjs` |
 | 硬禁区 | **9** 类（`core/guard.mjs` 的 `DENY`） | 逐条见「安全模型」节 |
@@ -45,7 +45,7 @@
 工作目录 `disk-steward/`。运行代码零依赖；类型检查依赖仓库根的 `typescript` 与 `@types/node`。要求 Node.js >= 22（`engines`；引用图用 `node:sqlite`，盘符枚举用 `fs.statfs`）。
 
 ```bash
-# 测试（240 用例 / 50 文件）
+# 测试（247 用例 / 53 文件）
 npm test                       # 等价于 node --test
 node --test test/w36.test.mjs  # 单文件
 
@@ -163,7 +163,7 @@ flowchart TD
 
 ---
 
-## 工具面（8 个）
+## 工具面（9 个）
 
 | 工具 | 只读 | 作用 | 关键约束 |
 |---|---|---|---|
@@ -175,6 +175,7 @@ flowchart TD
 | `disk_plan` | ✅ | 生成计划并签发一次性令牌 | 保护项 / 被挡项 / 非 stage 类 / 引用过期一律拒绝 |
 | `disk_exec` | ❌ | `stage` 移入隔离区（可撤销）/ `purge` 永久删除 | 必须带 `approval`（用户在对话里同意执行的原话），缺它一律拒绝；`purge` 只限本批次已 staged 项 |
 | `disk_undo` | ❌ | 按批次反演撤销 | 目标已存在则跳过并说明，不猜测 |
+| `disk_recover` | ✅ | 崩溃恢复：补齐「只写了 intent、终态行没落」的批次账目 | 只改台账，不移动、不删除任何文件（因此不需批准）；不给 `batchId` 则列出未决批次 |
 
 「人批准过」这个事实由**对话**提供：`disk_plan` 仍以 `issuer: 'agent'` 签发；agent 必须先把计划逐项给用户看，用户明确同意（例如回复「批准」）后，把**用户原话**作为 `approval` 传给 `disk_exec`。工具层校验 `approval` 非空后才把计划升格为 `issuer: 'human'`、`confirmedBy: 'chat:<原话>'`。
 
@@ -253,7 +254,7 @@ flowchart TD
 - 动作类型：`intent` → `stage` / `abort`；文件粒度另有 `file-intent` → `file-stage` / `file-abort`；`undo`；`purge`；`batch`（汇总行）。
 - **目录粒度**（默认）：`undo` 反向 rename，跨卷退化为复制+删。
 - **文件粒度**（`keepDir` / `noRecurse` 等）：先记 `file-intent` 再动磁盘，逐文件 `file-stage`；目录行标 `undoSupported: false`（只作审计），撤销靠逐文件反演。
-- **崩溃恢复** `recoverBatch({ ledgerPath, batchId })`：只看 intent 与终态的差集。
+- **崩溃恢复** `recoverBatch({ ledgerPath, batchId })`：只看 intent 与终态的差集。入口有两个：工具面 `disk_recover`（不给 batchId 则列出全部未决批次）与 `bin/recover.mjs`；两者都只补记账、不动磁盘，因此不需要人工批准。`disk_status` 会把未决批次数列出来。
   - 目标在、源不在 → 补记 `stage`（`recovered: true`）；
   - 源与目标都在 → 判 `inconsistent`，保留现场交给人判断，**不自动删任何一边**；
   - 源在、目标不在 → 记 `abort`。
@@ -380,7 +381,8 @@ disk-steward/
     scan.mjs               # 只读文本面板
     tui.mjs                # 交互面板（--allow-exec / --only-project / --with-system / --script）
     purge.mjs              # 隔离区人工释放（--batch / --yes / --by）
-  test/                    # 50 个测试文件 / 240 用例
+    recover.mjs            # 崩溃后补齐台账终态（--batch；不给则列出未决批次）
+  test/                    # 53 个测试文件 / 247 用例
 ```
 
 ---

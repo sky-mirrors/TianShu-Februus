@@ -249,7 +249,7 @@ export async function recoverBatch({ ledgerPath, batchId, now = Date.now() }) {
   const rows = readLedger(ledgerPath).filter((r) => r.batchId === batchId)
   const terminal = new Set(rows.filter((r) => r.action === 'stage' || r.action === 'done' || r.action === 'abort').map((r) => r.itemId))
   const intents = rows.filter((r) => r.action === 'intent' && !terminal.has(r.itemId))
-  const terminalFiles = new Set(rows.filter((r) => r.action === 'file-stage').map((r) => r.to))
+  const terminalFiles = new Set(rows.filter((r) => r.action === 'file-stage' || r.action === 'file-abort').map((r) => r.to))
 
   let completed = 0
   let inconsistent = 0
@@ -289,6 +289,43 @@ export async function recoverBatch({ ledgerPath, batchId, now = Date.now() }) {
   }
 
   return { batchId, completed, inconsistent, aborted, fileCompleted, fileAborted, details }
+}
+
+/**
+ * 未决批次：有 intent/file-intent 却缺对应终态的批次。崩溃后不必靠人翻台账找现场。
+ * 只读：不写台账、不动磁盘。
+ * @param {{ ledgerPath: string }} args
+ */
+export async function pendingBatches({ ledgerPath }) {
+  const rows = readLedger(ledgerPath)
+  const byBatch = new Map()
+  for (const r of rows) {
+    let b = byBatch.get(r.batchId)
+    if (!b) {
+      b = { batchId: r.batchId, items: new Set(), files: new Set(), doneItems: new Set(), doneFiles: new Set(), bytes: 0, lastTs: 0 }
+      byBatch.set(r.batchId, b)
+    }
+    if ((r.ts ?? 0) > b.lastTs) b.lastTs = r.ts ?? 0
+    if (r.action === 'intent') {
+      b.items.add(r.itemId)
+      b.bytes += r.bytes ?? 0
+    } else if (r.action === 'file-intent') {
+      b.files.add(r.to)
+    } else if (r.action === 'stage' || r.action === 'done' || r.action === 'abort') {
+      b.doneItems.add(r.itemId)
+    } else if (r.action === 'file-stage' || r.action === 'file-abort') {
+      b.doneFiles.add(r.to)
+    }
+  }
+  const out = []
+  for (const b of byBatch.values()) {
+    const pendingItems = [...b.items].filter((id) => !b.doneItems.has(id)).length
+    const pendingFiles = [...b.files].filter((to) => !b.doneFiles.has(to)).length
+    if (pendingItems || pendingFiles) {
+      out.push({ batchId: b.batchId, pendingItems, pendingFiles, bytes: b.bytes, lastTs: b.lastTs })
+    }
+  }
+  return out.sort((a, b) => b.lastTs - a.lastTs)
 }
 
 const underRoot = (child, root) => {

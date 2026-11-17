@@ -10,7 +10,7 @@ import { loadRules } from '../core/rules.mjs'
 import { buildRun, resolveVars, matchRule, computeTotals, expandGlobFiles } from '../core/run.mjs'
 import { fmtBytes } from '../core/probe.mjs'
 import { createPlan, isStageable } from '../core/plan.mjs'
-import { stage, purge, undo, quarantineStats, quarantinePolicy, EXEC_ERRORS } from '../core/executor.mjs'
+import { stage, purge, undo, recoverBatch, pendingBatches, quarantineStats, quarantinePolicy, EXEC_ERRORS } from '../core/executor.mjs'
 import { renderReport, renderDiff } from '../render/report.mjs'
 import { diffRuns, summarizeDiff } from '../core/diff.mjs'
 import { tianshuVars } from '../domains/tianshu.mjs'
@@ -195,6 +195,11 @@ export function createTools(deps = {}) {
               (q.items ? '（永久删除走 disk_exec mode=purge，需人工批准）' : '') +
               (alerts.length ? '｜' + alerts.join('｜') : ''),
           )
+          // 崩溃未决批次：不主动检查就永远没人知道有一批操作只做了一半
+          const pending = await pendingBatches({ ledgerPath: ledger })
+          if (pending.length) {
+            out.push(`未决批次            ${pending.length} 批（有 intent 缺终态）；用 disk_recover 补齐账目`)
+          }
         } catch (e) {
           out.push(`隔离区              读取失败：${e.code ?? e.message}`)
         }
@@ -345,7 +350,15 @@ export function createTools(deps = {}) {
           const r = await purge({ plan: approved, batchId: call.args.batchId, token: call.args.token, quarantineRoot: quarantine, ledgerPath: ledger })
           return { content: `已永久删除 ${r.purged} 项（不可撤销）` }
         } catch (e) {
-          return { content: `${e.code ?? 'ERROR'}: ${e.message}`, isError: true }
+          // 中断后最要紧的是告诉人"现在处于什么状态、下一步按哪个键"，
+          // 否则用户只能看到 EPERM 然后不知道该不该再跑一次
+          return {
+            content:
+              `${e.code ?? 'ERROR'}: ${e.message}\n` +
+              `已完成的部分留在隔离区、未完成的项原地未动（不是原子操作）。` +
+              `下一步：disk_recover 补齐账目（只改台账），或 disk_undo 把已移入的撤回。`,
+            isError: true,
+          }
         }
       },
     },
@@ -373,6 +386,56 @@ export function createTools(deps = {}) {
             ? '\n跳过：\n' + r.skipped.map((s) => `  · ${s.from}（${s.reason}）`).join('\n')
             : ''
           return { content: `已恢复 ${r.restored} 项${skipped}` }
+        } catch (e) {
+          return { content: `${e.code ?? 'ERROR'}: ${e.message}`, isError: true }
+        }
+      },
+    },
+    {
+      name: 'disk_recover',
+      description:
+        '崩溃恢复：把「只写了 intent、终态行没落」的批次账目补齐。只改台账，不移动、不删除任何文件——因此不需要人工批准；真要撤文件用 disk_undo，要释放空间用 disk_exec。不给 batchId 时列出全部未决批次。',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          batchId: { type: 'string', description: '要恢复的批次；省略则只列出未决批次，不做任何补救' },
+        },
+        required: [],
+      },
+      concurrencySafe: false,
+      timeoutMs: 10000,
+      async execute(call) {
+        const batchId = call?.args?.batchId
+        try {
+          if (!batchId) {
+            const list = await pendingBatches({ ledgerPath: ledger })
+            if (!list.length) return { content: '没有未决批次：台账里每一条 intent 都已有终态，无需恢复。' }
+            return {
+              content:
+                `发现 ${list.length} 个未决批次（有 intent、缺终态）：\n` +
+                list
+                  .map(
+                    (b) =>
+                      `  · ${b.batchId}  待判定 ${b.pendingItems} 项 / ${b.pendingFiles} 个文件` +
+                      (b.bytes ? ` / 声明 ${fmtBytes(b.bytes)}` : '') +
+                      ` / 最后活动 ${new Date(b.lastTs).toISOString().slice(0, 19)}`,
+                  )
+                  .join('\n') +
+                `\n逐个调用 disk_recover({ batchId }) 补齐账目；只补记录，不动磁盘。`,
+            }
+          }
+          const r = await recoverBatch({ ledgerPath: ledger, batchId })
+          const nothing = r.completed + r.aborted + r.inconsistent + r.fileCompleted + r.fileAborted === 0
+          if (nothing) return { content: `批次 ${batchId} 没有未决条目（0 个待处理），台账本就完整。` }
+          return {
+            content:
+              `批次 ${batchId} 恢复完成：\n` +
+              `  已完成（补记 stage）     ${r.completed} 项\n` +
+              `  未移动（补记 abort）     ${r.aborted} 项\n` +
+              `  不一致（保留现场待人工） ${r.inconsistent} 项\n` +
+              `  文件粒度：补记 file-stage ${r.fileCompleted} / file-abort ${r.fileAborted}\n` +
+              `只改了台账，没有移动或删除任何文件。撤回用 disk_undo batchId=${batchId}；释放空间用 disk_exec mode=purge。`,
+          }
         } catch (e) {
           return { content: `${e.code ?? 'ERROR'}: ${e.message}`, isError: true }
         }

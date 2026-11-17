@@ -17,7 +17,8 @@
       { "name": "disk_diff", "description": "对比两次扫描的增量（变大/变小/新增/消失）" },
       { "name": "disk_plan", "description": "把勾选项变成执行计划并签发一次性令牌（保护项/被挡项一律拒绝）" },
       { "name": "disk_exec", "description": "执行计划：stage 移入隔离区可撤销；purge 需令牌且仅限已 staged 批次；两者都必须带 approval（用户同意执行的原话）" },
-      { "name": "disk_undo", "description": "按批次撤销 stage（依据台账反演）" }
+      { "name": "disk_undo", "description": "按批次撤销 stage（依据台账反演）" },
+      { "name": "disk_recover", "description": "崩溃恢复：补齐「只写了 intent、终态行没落」的批次账目；只改台账，不移动不删除任何文件" }
     ],
     "lifecycle": []
   },

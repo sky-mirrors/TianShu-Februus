@@ -56,7 +56,7 @@ flowchart TB
 ```bash
 cd disk-steward
 
-# 测试：240 用例 / 50 个文件
+# 测试：247 用例 / 53 个文件
 npm test                        # 等价于 node --test
 node --test test/w36.test.mjs   # 单文件
 
@@ -69,11 +69,14 @@ node bin/tui.mjs --with-system --allow-exec
 # 隔离区：查看 / 人工永久删除
 node bin/purge.mjs
 node bin/purge.mjs --batch <batchId> --yes --by <你的名字>
+
+# 崩溃后补齐台账（只改记录，不动磁盘；不给 --batch 则列出未决批次）
+node bin/recover.mjs
 ```
 
 作为天枢插件加载时，入口是 `index.js`（`defineTianshuPlugin({ id: 'disk-steward', activate })`），宿主注入 `storage.dataDir()` 决定台账与隔离区位置；非宿主调用（`bin/` 下的 CLI、测试）落在 `%USERPROFILE%\.rivet\plugins\disk-steward\data`。
 
-## 工具面（8 个）
+## 工具面（9 个）
 
 | 工具 | 只读 | 作用 |
 |---|---|---|
@@ -85,6 +88,7 @@ node bin/purge.mjs --batch <batchId> --yes --by <你的名字>
 | `disk_plan` | ✅ | 生成计划并签发一次性令牌；保护项 / 被挡项 / 引用过期一律拒绝 |
 | `disk_exec` | ❌ | `stage` 移入隔离区（可撤销）/ `purge` 永久删除；必须带用户批准的证据 |
 | `disk_undo` | ❌ | 按批次反演撤销；目标已存在则跳过并说明，不猜测 |
+| `disk_recover` | ✅ | 崩溃恢复：补齐「只写了 intent、终态行没落」的批次账目。只改台账，不动磁盘，因此不需批准；不给 `batchId` 则列出未决批次 |
 
 「人批准过」这个事实由**对话**提供：`disk_plan` 以 `issuer: 'agent'` 签发；agent 先把计划逐项给用户看，用户明确同意后把其原话作为 `approval` 传给 `disk_exec`。宿主提供了会话记录（`host.transcripts`）时，工具层会核对原话是否真出自用户；拿不到记录时一律 fail-closed。
 
@@ -100,7 +104,7 @@ disk-steward/
   render/                  # 文本面板、TUI 状态机、确认页、Markdown 报告
   rules/tianshu.rules.json # 天枢域规则（白名单）
   bin/                     # scan.mjs / tui.mjs / purge.mjs
-  test/                    # 240 用例 / 50 个文件
+  test/                    # 247 用例 / 53 个文件
   dist/                    # 发行目录，由 scripts/pack-release.mjs 生成（不入库）
 docs/                      # 架构设计、生态调研、边界对照
 ```
@@ -109,8 +113,8 @@ docs/                      # 架构设计、生态调研、边界对照
 
 | 项 | 数值 | 怎么核 |
 |---|---|---|
-| 测试 | **240 用例 / 50 个文件，全绿**（`pass 240 / fail 0`，约 166s） | `npm test` |
-| 工具 | **8** 个 | `createTools().length` |
+| 测试 | **247 用例 / 53 个文件，全绿**（`pass 247 / fail 0`，约 184s） | `npm test` |
+| 工具 | **9** 个 | `createTools().length` |
 | 规则 | 天枢域 **21** 条（stage 12 / compact 2 / protected 7）、系统域 **35** 条 | `rules/tianshu.rules.json`、`domains/system.mjs` |
 | 硬禁区 | **9** 类 | `core/guard.mjs` 的 `DENY` |
 | 代码量 | **81 个 `.mjs` / 7287 行**（含测试；生产代码 31 个文件） | `find` + `wc -l` |
