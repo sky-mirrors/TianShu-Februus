@@ -44,6 +44,7 @@ export function createTools(deps = {}) {
           includeSamples: { type: 'boolean', description: '默认 false：结果里的 item.samples 一律清空、不写真实文件名；显式 true 才记录样本文件名（会随 run 落盘）' },
           allDrives: { type: 'boolean', description: '默认 false：为 true 时额外扫描当前设备上的全部盘（盘级容量 + 每盘顶层条目），结果挂在 run.drives' },
           driveDepth: { type: 'string', enum: ['summary', 'deep'], description: '配合 allDrives：summary 只列顶层条目（秒级）；deep 对顶层项逐个 measure 出占用排序，受 budgetMs 预算约束' },
+          systemExec: { type: 'boolean', description: '默认 false：系统域只读——扫描、分级、解释，但不给任何项签发执行器（与 w4 不变量一致）。显式 true 才给非保护且未被挡的项 stage 执行器' },
         },
       },
       concurrencySafe: true,
@@ -63,7 +64,7 @@ export function createTools(deps = {}) {
           refIndexDeps: { cachePath: join(state, 'refcache.json'), ttlMs: 60000 },
         })
 
-        const sys = domain === 'tianshu' ? null : await scanSystem({ execEnabled: true })
+        const sys = domain === 'tianshu' ? null : await scanSystem({ execEnabled: call?.args?.systemExec === true })
         const extra = sys
           ? `\n[系统域] ${sys.items.length} 项 / ${fmtBytes(sys.totals.bytes)}，可执行项需 disk_plan + 人工批准；` +
             `禁区拦截 ${sys.denied.length} 条` +
@@ -291,11 +292,22 @@ export function createTools(deps = {}) {
     },
     {
       name: 'disk_undo',
-      description: '按批次撤销 stage（依据台账反演）。目标已存在时跳过并说明，不猜测。',
-      inputSchema: { type: 'object', properties: { batchId: { type: 'string' } }, required: ['batchId'] },
+      description: '按批次撤销 stage（依据台账反演）。撤销会动磁盘，与执行同级：必须在对话中由用户明确要求撤销，并把原话放进 approval——缺 approval 一律拒绝。目标已存在时跳过并说明，不猜测。',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          batchId: { type: 'string' },
+          approval: { type: 'string', description: '用户在本轮对话中明确要求撤销的原话。这是「人批准过」这一事实的唯一来源：缺失即拒绝，不要自行填写。' },
+        },
+        required: ['batchId', 'approval'],
+      },
       concurrencySafe: false,
       timeoutMs: 120000,
       async execute(call) {
+        const approval = typeof call?.args?.approval === 'string' ? call.args.approval.trim() : ''
+        if (!approval) {
+          return { content: `EXEC_NOT_HUMAN_APPROVED: ${EXEC_ERRORS.NOT_HUMAN_APPROVED}——撤销会动磁盘，先把要撤销的批次给用户看并取得同意，再把用户原话作为 approval 传入`, isError: true }
+        }
         try {
           const r = await undo({ batchId: call.args.batchId, ledgerPath: ledger })
           const skipped = r.skipped.length

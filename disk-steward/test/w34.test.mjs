@@ -86,7 +86,26 @@ test('工具面：用户批准原话到位 → stage 成功，台账记人工批
   assert.equal(intent.issuer, 'human', '台账必须记下"人批准过"')
   assert.match(String(intent.confirmedBy), /^chat:/, '台账必须能看出批准来自对话')
 
-  const u = await tool(t, 'disk_undo').execute({ args: { batchId } })
+  const u = await tool(t, 'disk_undo').execute({ args: { batchId, approval: '撤销刚才那次' } })
   assert.equal(u.isError, undefined, `撤销应成功：${u.content}`)
   assert.equal(existsSync(join(sb.data, 'cache', 'a.txt')), true, 'undo 后源文件应回到原位')
+})
+
+// W38：撤销同样是「人批准过」的动作。缺 approval 的 undo 一律拒绝——
+// 否则模型可以自说自话把一次已执行的清理悄悄撤掉，或对不属于本次对话的批次动手。
+test('W38：工具面 undo 缺 approval 一律拒绝，且不动磁盘', async () => {
+  const sb = sandbox()
+  const t = tools(sb)
+  const item = mkItem(sb)
+  const { planId, token } = await planOf(t, sb, item)
+  const staged = await tool(t, 'disk_exec').execute({ args: { planId, token, mode: 'stage', approval: '批准' } })
+  const batchId = /batch_id=(\S+)/.exec(String(staged.content))?.[1]
+  assert.ok(batchId, `应先把批次 stage 出来：${staged.content}`)
+
+  for (const args of [{ batchId }, { batchId, approval: '   ' }]) {
+    const r = await tool(t, 'disk_undo').execute({ args })
+    assert.equal(r.isError, true, `缺 approval 的撤销必须拒绝：${JSON.stringify(args)}`)
+    assert.match(String(r.content), /EXEC_NOT_HUMAN_APPROVED/)
+  }
+  assert.equal(existsSync(join(sb.data, 'cache', 'a.txt')), false, '被拒时隔离区不得移动')
 })
