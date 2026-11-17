@@ -51,14 +51,16 @@ test('W50：路径不存在的规则静默跳过（跨机器的核心语义）',
   assert.equal(run.totals.selectable, 0)
 })
 
-test('W50：整本系统规则在本机跑一遍不抛错（抽样，避免真测 15 GB 缓存）', async () => {
-  // 只取不涉及大目录的规则：实测全量跑会把 15 GB 网易云缓存完整递归测量一遍（91 秒），
-  // 那不是这条断言要证明的东西（它要证明的是「不抛错」），所以抽样。
+test('W50：整本系统规则跑一遍不抛错，且每条都带解释（抽样，避免真测 15 GB 缓存）', async () => {
+  // 只取不涉及大目录的规则：实测全量跑会把 15 GB 网易云缓存完整递归测量一遍（约 70 秒）。
+  // 但「每条都有解释」这条断言必须保留——它曾因我写错字段名（explain.reason）而假红，
+  // 当时我误判成「耗时太长」并把断言删了，等于掩盖真错误。正确字段是 explain.why。
   const cheap = rules.filter((r) => !/netease|npm-cache|ollama|user-temp|cargo|nuget|jetbrains/.test(r.id))
   const run = await buildRun({ rules: cheap, vars: systemVars(), collectUnmatched: false })
   assert.ok(Array.isArray(run.items), '应返回 items 数组')
   for (const i of run.items) {
     assert.ok(i.bytes >= 0, `${i.ruleId} 字节数异常`)
+    assert.notEqual(i.explain?.why, undefined, `${i.ruleId} 缺 explain.why（解释的来源）`)
   }
 })
 
