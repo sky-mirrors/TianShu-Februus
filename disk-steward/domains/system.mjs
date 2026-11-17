@@ -154,6 +154,97 @@ export function systemRules() {
       rebuild: '重新安装依赖时重建',
       executor: { type: 'stage' },
     },
+    // 第二批：用户主目录下的包管理器缓存 + 浏览器站点缓存 + 模型资产。
+    // 前八条都是可重建的派生数据；Ollama 模型与 UWP 应用数据是用户资产，判 brown 永不删。
+    {
+      id: 'sys.cargo-registry',
+      title: 'Cargo 注册表缓存（~/.cargo/registry）',
+      match: { kind: 'prefix', path: '{{USERPROFILE}}/.cargo/registry' },
+      grade: 'yellow',
+      reason: 'Rust 依赖源码与索引缓存，删后需重新下载',
+      rebuild: '重新构建时按需下载',
+      executor: { type: 'stage' },
+    },
+    {
+      id: 'sys.maven-repo',
+      title: 'Maven 本地仓库（~/.m2/repository）',
+      match: { kind: 'prefix', path: '{{USERPROFILE}}/.m2/repository' },
+      grade: 'yellow',
+      reason: 'Java 依赖构件缓存，删后需重新下载',
+      rebuild: '重新构建时按需下载',
+      executor: { type: 'stage' },
+    },
+    {
+      id: 'sys.nuget-packages',
+      title: 'NuGet 包缓存（~/.nuget/packages）',
+      match: { kind: 'prefix', path: '{{USERPROFILE}}/.nuget/packages' },
+      grade: 'yellow',
+      reason: '.NET 包缓存，删后需重新下载',
+      rebuild: '重新构建时按需下载',
+      executor: { type: 'stage' },
+    },
+    {
+      id: 'sys.user-cache',
+      title: '用户 .cache（~/.cache）',
+      match: { kind: 'prefix', path: '{{USERPROFILE}}/.cache' },
+      grade: 'yellow',
+      reason: '各类命令行工具的缓存目录，内容按工具混放，删前建议先看一眼里面有什么',
+      rebuild: '由各工具自行重建',
+      executor: { type: 'stage' },
+    },
+    {
+      id: 'sys.edge-sw-cache',
+      title: 'Edge Service Worker 缓存',
+      match: { kind: 'prefix', path: '{{LOCALAPPDATA}}/Microsoft/Edge/User Data/Default/Service Worker' },
+      // 与其余 Edge 规则一致：浏览器开着时动它的站点缓存会损坏/profile 损坏
+      precondition: { kind: 'processNotRunning', name: 'msedge' },
+      grade: 'green',
+      reason: '站点离线资源缓存，删后访问时重新拉取',
+      rebuild: '自动重建',
+      executor: { type: 'stage' },
+    },
+    {
+      id: 'sys.edge-indexeddb',
+      title: 'Edge IndexedDB（Default/IndexedDB）',
+      match: { kind: 'prefix', path: '{{LOCALAPPDATA}}/Microsoft/Edge/User Data/Default/IndexedDB' },
+      precondition: { kind: 'processNotRunning', name: 'msedge' },
+      grade: 'green',
+      reason: '站点本地数据库缓存；删后部分站点会丢离线数据并需重新登录',
+      rebuild: '自动重建（可能丢离线数据）',
+      executor: { type: 'stage' },
+    },
+    {
+      id: 'sys.inet-cache',
+      title: 'IE/系统网络缓存（INetCache）',
+      match: { kind: 'prefix', path: '{{LOCALAPPDATA}}/Microsoft/Windows/INetCache' },
+      grade: 'green',
+      reason: '系统级网络临时缓存，可自动重建',
+      rebuild: '自动重建',
+      executor: { type: 'stage' },
+    },
+    {
+      id: 'sys.web-cache',
+      title: 'WebCache（系统浏览器缓存库）',
+      match: { kind: 'prefix', path: '{{LOCALAPPDATA}}/Microsoft/Windows/WebCache' },
+      grade: 'green',
+      reason: '系统 Web 缓存数据库，可自动重建',
+      rebuild: '自动重建',
+      executor: { type: 'stage' },
+    },
+    {
+      id: 'sys.uwp-packages',
+      title: 'UWP 应用数据（%LOCALAPPDATA%\\Packages）',
+      match: { kind: 'prefix', path: '{{LOCALAPPDATA}}/Packages' },
+      grade: 'brown',
+      reason: 'UWP 应用的数据、账号与设置，删了应用需要重新初始化',
+    },
+    {
+      id: 'sys.ollama-models',
+      title: 'Ollama 模型（~/.ollama/models）',
+      match: { kind: 'prefix', path: '{{USERPROFILE}}/.ollama/models' },
+      grade: 'brown',
+      reason: '已下载的大模型权重，删了要重新下载数 GB；属用户资产，不清理',
+    },
   ]
 }
 
@@ -164,6 +255,8 @@ export function systemVars(env = process.env) {
     LOCALAPPDATA: env.LOCALAPPDATA ?? '',
     WINDIR: env.WINDIR ?? '',
     SYSTEMDRIVE: env.SYSTEMDRIVE ?? '',
+    // 用户主目录：~/.cargo、~/.m2、~/.nuget、~/.cache、~/.ollama 都挂在它下面
+    USERPROFILE: env.USERPROFILE ?? '',
     unmatchedRoots: [],
   }
 }
