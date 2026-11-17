@@ -89,7 +89,6 @@ export function createTools(deps = {}) {
         const merged = driveScan
           ? { ...mergeDomainRun({ run, sys, domain }), drives: driveScan }
           : mergeDomainRun({ run, sys, domain })
-        saveRun(state, merged) // 落盘：UI/TUI/后续 plan 都读这份文件（唯一事实源）
         const items = merged.items
         const top = items
           .filter((i) => i.bytes >= min)
@@ -122,6 +121,8 @@ export function createTools(deps = {}) {
               budgetMs: Number(call.args.sweepBudgetMs ?? 120000),
             })
           : null
+        // 整盘画像也要落盘：否则只能活在一屏终端输出里——不能归档，也不能与下次扫描对比
+        saveRun(state, sweep ? { ...merged, sweep } : merged)
         // 建议层：分级不是结论。用户要的是「这个删不删、不删的话它到底是什么」
         const advice = bucketAdvice(merged.items)
         const adviceSection = [

@@ -133,6 +133,26 @@ export function renderReport(run = {}) {
     out.push('')
   }
 
+  // 整盘扫描（fullDrive）另算一段：它与两域条目是不同口径，不能混进上面的汇总表
+  const sweep = run.sweep
+  if (sweep) {
+    out.push(
+      '## 整盘扫描',
+      '',
+      `- 根：\`${dash(sweep.root)}\`　深度：${dash(sweep.depth)}${sweep.truncated ? '　⚠ 预算用尽，后续目录未测' : ''}`,
+      `- 扫了 ${dash(sweep.scanned)} 个目录　候选 ${dash(sweep.candidatesTotal)} 项　未收录 ${(sweep.unmatched ?? []).length} 个路径（按保护处理，不当垃圾）`,
+      '',
+      '| 建议 | 项 | 体积 | 路径 | 理由 |',
+      '| --- | --- | --- | --- | --- |',
+    )
+    for (const c of sweep.candidates ?? []) {
+      out.push(
+        `| ${dash(c.advice?.label)} | ${dash(c.title)} | ${fmtBytes(c.bytes ?? 0)} | \`${dash(c.path)}\` | ${dash(c.advice?.reason)} |`,
+      )
+    }
+    out.push('')
+  }
+
   out.push('---', '', `报告由 disk-steward 生成，依据 \`.runs/${dash(run.runId)}.json\`；同一份 run 可复算。`, '')
   return out.join('\n')
 }
