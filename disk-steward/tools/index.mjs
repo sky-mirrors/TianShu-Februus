@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path'
 import { pluginStatePaths, defaultHostDataDir } from '../core/paths.mjs'
 import { matchApproval } from '../core/approval.mjs'
 import { bucketAdvice } from '../core/advice.mjs'
+import { sweepDrive } from '../core/sweep.mjs'
 import { loadRules } from '../core/rules.mjs'
 import { buildRun, resolveVars, matchRule, computeTotals } from '../core/run.mjs'
 import { fmtBytes } from '../core/probe.mjs'
@@ -13,7 +14,7 @@ import { stage, purge, undo, quarantineStats, quarantinePolicy, EXEC_ERRORS } fr
 import { renderReport, renderDiff } from '../render/report.mjs'
 import { diffRuns, summarizeDiff } from '../core/diff.mjs'
 import { tianshuVars } from '../domains/tianshu.mjs'
-import { scanSystem } from '../domains/system.mjs'
+import { scanSystem, systemRules, systemVars } from '../domains/system.mjs'
 import { listDrives } from '../core/drives.mjs'
 import { scanDrives } from '../domains/drives.mjs'
 
@@ -49,6 +50,9 @@ export function createTools(deps = {}) {
           allDrives: { type: 'boolean', description: '默认 false：为 true 时额外扫描当前设备上的全部盘（盘级容量 + 每盘顶层条目），结果挂在 run.drives' },
           driveDepth: { type: 'string', enum: ['summary', 'deep'], description: '配合 allDrives：summary 只列顶层条目（秒级）；deep 对顶层项逐个 measure 出占用排序，受 budgetMs 预算约束' },
           systemExec: { type: 'boolean', description: '默认 false：系统域只读——扫描、分级、解释，但不给任何项签发执行器（与 w4 不变量一致）。显式 true 才给非保护且未被挡的项 stage 执行器' },
+          fullDrive: { type: 'string', description: '整盘扫描：盘符如 "C" 或路径。递归枚举盘内目录逐个过规则库，命中规则给分级与建议，未命中的仍报出体积但 advice=不建议删除（不当作垃圾）。与 domain 独立' },
+          sweepDepth: { type: 'number', description: '配合 fullDrive：递归深度，默认 2（盘根 + 下两层）' },
+          sweepBudgetMs: { type: 'number', description: '配合 fullDrive：整盘扫描预算毫秒，默认 120000；超预算标 truncated，不假装扫完了' },
         },
       },
       concurrencySafe: true,
@@ -102,6 +106,17 @@ export function createTools(deps = {}) {
               (driveScan.deep ? `｜顶层项合计 ${driveScan.drives.reduce((n, d) => n + d.topTotal, 0)}，未测 ${driveScan.drives.reduce((n, d) => n + d.unmeasured, 0)}` : '') +
               (driveScan.denied.length ? `｜禁区拦截 ${driveScan.denied.length} 条` : '')
             : '')
+        // 整盘扫描（与两域独立）：回答「这块盘里哪里是垃圾」
+        const sweep = call?.args?.fullDrive
+          ? await sweepDrive({
+              root: /^[A-Za-z]:?[\\/]?$/.test(String(call.args.fullDrive)) ? `${String(call.args.fullDrive)[0].toUpperCase()}:\\` : String(call.args.fullDrive),
+              depth: Number(call.args.sweepDepth ?? 2),
+              // 整盘扫描要同时用两套规则：只给天枢规则会让 C:\tmp 这类系统目录落进「未收录」
+              rules: [...rules, ...systemRules()],
+              vars: { ...vars, ...systemVars() },
+              budgetMs: Number(call.args.sweepBudgetMs ?? 120000),
+            })
+          : null
         // 建议层：分级不是结论。用户要的是「这个删不删、不删的话它到底是什么」
         const advice = bucketAdvice(merged.items)
         const adviceSection = [
@@ -111,7 +126,13 @@ export function createTools(deps = {}) {
             .slice(0, 12)
             .map((a) => `· [${a.label}] ${a.item.title} ${fmtBytes(a.item.bytes ?? 0)} — ${a.reason}`),
         ].join('\n')
-        return { content: `${summary}\n${adviceSection}\n${JSON.stringify(top, null, 1)}` }
+        const sweepSection = sweep
+          ? [
+              `[整盘] ${sweep.root} 深度 ${sweep.depth}｜扫了 ${sweep.scanned} 个目录｜候选 ${sweep.candidatesTotal} 项｜未收录 ${sweep.unmatched.length} 个路径按保护处理${sweep.truncated ? '｜预算已用尽（后续未测）' : ''}`,
+              ...sweep.candidates.slice(0, 15).map((c) => `· [${c.advice.label}] ${c.title} ${fmtBytes(c.bytes ?? 0)} — ${c.advice.reason}｜${c.path}`),
+            ].join('\n')
+          : ''
+        return { content: `${summary}\n${adviceSection}${sweepSection ? '\n' + sweepSection : ''}\n${JSON.stringify(top, null, 1)}` }
       },
     },
     {

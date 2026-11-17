@@ -46,8 +46,10 @@ export function resolveVars(input, vars) {
 
 // 规则命中判定：按段边界比较，且分隔符无关（Windows 上 \\ 与 / 混用是常态）
 export function matchRule(path, rule, vars) {
-  const target = normalizePath(resolveVars(rule.match.path, vars))
-  const p = normalizePath(path)
+  // Windows 路径大小写不敏感：规则里的 {{WINDIR}}/Temp（C:\windows）与真实目录 C:\Windows 是同一个。
+  // 旧实现逐字符比较 => C:\Windows\Temp 永远匹配不上，被归进「未收录」。
+  const target = normalizePath(resolveVars(rule.match.path, vars)).toLowerCase()
+  const p = normalizePath(path).toLowerCase()
   if (p !== target && !p.startsWith(target + '/')) return null
   return rule
 }
