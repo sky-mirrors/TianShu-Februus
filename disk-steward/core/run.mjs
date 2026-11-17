@@ -50,15 +50,29 @@ export function resolveVars(input, vars) {
 // 为什么需要：buildRun 是「路径存在就测量」，带 `*` 的路径永远 exists=false，
 // 所以 glob 规则必须先展开成具体路径，再交给 buildRun。
 export async function expandGlobFiles(pattern) {
-  const dir = dirname(String(pattern))
-  const name = basename(String(pattern))
-  const re = globToRe(name.toLowerCase()) // Windows 上文件名比较大小写不敏感
-  try {
-    const entries = await readdir(dir, { withFileTypes: true })
-    return entries.filter((e) => e.isFile() && re.test(e.name.toLowerCase())).map((e) => join(dir, e.name))
-  } catch {
-    return []
+  const parts = String(pattern).split(/[\\/]+/).filter(Boolean)
+  const first = parts.findIndex((p) => p.includes('*'))
+  // 没有通配符：原样返回，交给 buildRun 的 exists 判断
+  if (first < 0) return [String(pattern)]
+  let bases = [parts.slice(0, first).join('/')]
+  for (const seg of parts.slice(first)) {
+    if (!seg.includes('*')) {
+      bases = bases.map((b) => `${b}/${seg}`)
+      continue
+    }
+    const re = globToRe(seg.toLowerCase()) // Windows 上名字比较大小写不敏感
+    const next = []
+    for (const base of bases) {
+      let entries
+      try { entries = await readdir(base, { withFileTypes: true }) } catch { continue }
+      for (const e of entries) {
+        if (e.isSymbolicLink()) continue
+        if (re.test(e.name.toLowerCase())) next.push(`${base}/${e.name}`)
+      }
+    }
+    bases = next
   }
+  return bases
 }
 
 export function matchRule(path, rule, vars) {

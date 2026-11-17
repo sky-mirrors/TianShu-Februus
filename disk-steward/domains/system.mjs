@@ -1,7 +1,7 @@
 // 系统域：白名单目标 + 禁区硬闸门；默认 executor 置空（只读）。
 // 立场：只有调用方显式传 execEnabled: true 才给 stage 能力；即便开启，保护项与前置条件未满足的项仍不可执行。
 import { join } from 'node:path'
-import { buildRun, resolveVars, computeTotals } from '../core/run.mjs'
+import { buildRun, resolveVars, computeTotals, expandGlobFiles } from '../core/run.mjs'
 import { isDenied, denyReason } from '../core/guard.mjs'
 import { probeItems } from '../core/occupancy.mjs'
 
@@ -245,6 +245,46 @@ export function systemRules() {
       grade: 'brown',
       reason: '已下载的大模型权重，删了要重新下载数 GB；属用户资产，不清理',
     },
+    // 第三批：实测本机存在的应用缓存。判绿色只针对纯缓存子目录——
+    // 父目录（网易云整目录 / Edge 用户数据 / JetBrains 整个）都含用户资产，绝不能整删。
+    {
+      id: 'sys.netease-cache',
+      title: '网易云音乐缓存（CloudMusic\\Cache）',
+      match: { kind: 'prefix', path: '{{LOCALAPPDATA}}/Netease/CloudMusic/Cache' },
+      grade: 'green',
+      reason: '在线试听缓存（本机实测十余 GB）；歌曲文件在 Library 目录，不在此范围内',
+      rebuild: '播放时自动重新缓存',
+      executor: { type: 'stage' },
+    },
+    {
+      id: 'sys.jetbrains-caches',
+      title: 'JetBrains 索引缓存（JetBrains\\*\\caches）',
+      match: { kind: 'glob', path: '{{LOCALAPPDATA}}/JetBrains/*/caches' },
+      grade: 'yellow',
+      reason: 'IDE 的索引与缓存，删后首次打开项目需重建索引（耗时较长）；配置与插件不在此目录',
+      rebuild: '首次打开项目时重建',
+      executor: { type: 'stage' },
+    },
+    {
+      id: 'sys.edge-component-cache',
+      title: 'Edge 组件解包缓存（component_crx_cache）',
+      match: { kind: 'prefix', path: '{{LOCALAPPDATA}}/Microsoft/Edge/User Data/component_crx_cache' },
+      precondition: { kind: 'processNotRunning', name: 'msedge' },
+      grade: 'green',
+      reason: '已安装扩展的组件解包缓存，可重新解包',
+      rebuild: '自动重建',
+      executor: { type: 'stage' },
+    },
+    {
+      id: 'sys.edge-gr-cache',
+      title: 'Edge 着色器缓存（GrShaderCache）',
+      match: { kind: 'prefix', path: '{{LOCALAPPDATA}}/Microsoft/Edge/User Data/GrShaderCache' },
+      precondition: { kind: 'processNotRunning', name: 'msedge' },
+      grade: 'green',
+      reason: 'GPU 着色器缓存，删后首次渲染会重新编译',
+      rebuild: '自动重建',
+      executor: { type: 'stage' },
+    },
   ]
 }
 
@@ -275,6 +315,18 @@ export async function scanSystem({ env = process.env, now = Date.now(), probe = 
       continue
     }
     const resolved = resolveVars(r.match.path, vars)
+    // glob 规则（如 JetBrains/*/caches）要先展开成具体目录：
+    // buildRun 是「路径存在就测量」，带 `*` 的路径永远 exists=false，不展开即静默失效。
+    if (r.match.kind === 'glob') {
+      for (const hit of await expandGlobFiles(resolved)) {
+        if (isDenied(hit)) {
+          denied.push({ path: hit, reason: denyReason(hit) })
+          continue
+        }
+        rules.push({ ...r, match: { kind: 'prefix', path: hit } })
+      }
+      continue
+    }
     if (isDenied(resolved)) {
       denied.push({ path: resolved, reason: denyReason(resolved) })
       continue
