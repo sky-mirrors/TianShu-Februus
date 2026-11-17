@@ -102,7 +102,9 @@ async function findUnmatched(vars, rules) {
     for (const e of entries) {
       const p = join(root, e.name)
       if (covered(p, rulePaths)) continue
-      out.push({ path: p, grade: 'brown', executor: null, ruleId: null, reason: '未收录规则 → 按保护处理' })
+      // 带体积：否则「这 N 个路径没规则覆盖」无法判断值不值得补规则。只读 measure，不改执行路径。
+      const stats = await measure(p)
+      out.push({ path: p, bytes: stats.bytes, grade: 'brown', executor: null, ruleId: null, reason: '未收录规则 → 按保护处理' })
     }
   }
   return out

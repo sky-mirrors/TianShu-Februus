@@ -122,8 +122,16 @@ export function renderReport(run = {}) {
   }
 
   if (unmatched.length) {
-    out.push('## 未收录路径（按保护处理）', '', '规则库未覆盖，因此一律不清理；需要纳管时补规则。', '')
-    for (const u of unmatched) out.push(`- \`${dash(u.path)}\``)
+    // 按体积降序 + 合计：这节的作用是回答「值不值得为它们补规则」，光有路径答不了
+    const rows = [...unmatched].sort((a, b) => (b.bytes ?? 0) - (a.bytes ?? 0))
+    const totalBytes = rows.reduce((s, u) => s + (u.bytes ?? 0), 0)
+    out.push(
+      '## 未收录路径（按保护处理）',
+      '',
+      `规则库未覆盖，因此一律不清理；共 ${rows.length} 个，合计 ${fmtBytes(totalBytes)}——要清它们需先补规则。`,
+      '',
+    )
+    for (const u of rows) out.push(`- \`${dash(u.path)}\`${u.bytes === undefined ? '' : ` — ${fmtBytes(u.bytes)}`}`)
     out.push('')
   }
 
