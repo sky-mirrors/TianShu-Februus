@@ -285,6 +285,64 @@ export function systemRules() {
       rebuild: '自动重建',
       executor: { type: 'stage' },
     },
+    // 第四批：跨机器的常见开发工具链缓存。这些路径与具体应用版本无关，
+    // 在任何装了对应工具链的机器上都成立；没装的机器由 buildRun 的 exists 判断自动跳过。
+    // 注意：%APPDATA%（Roaming）下的应用缓存（Discord/Slack/VS Code 等）不在此列——
+    // guard 的 USER_DOCS 禁区把整个 Roaming 拦下，加规则也不会生效。
+    {
+      id: 'sys.go-build-cache',
+      title: 'Go 构建缓存（%LOCALAPPDATA%\\go-build）',
+      match: { kind: 'prefix', path: '{{LOCALAPPDATA}}/go-build' },
+      grade: 'green',
+      reason: 'Go 编译中间产物缓存，可随时重建',
+      rebuild: '下次编译自动重建',
+      executor: { type: 'stage' },
+    },
+    {
+      id: 'sys.go-module-cache',
+      title: 'Go 模块缓存（~/go/pkg/mod）',
+      match: { kind: 'prefix', path: '{{USERPROFILE}}/go/pkg/mod' },
+      grade: 'yellow',
+      reason: '已下载的 Go 依赖模块，删后需重新下载（离线时会失败）',
+      rebuild: '按需重新下载',
+      executor: { type: 'stage' },
+    },
+    {
+      id: 'sys.gradle-cache',
+      title: 'Gradle 缓存（~/.gradle/caches）',
+      match: { kind: 'prefix', path: '{{USERPROFILE}}/.gradle/caches' },
+      grade: 'yellow',
+      reason: 'Gradle 依赖与构建缓存，删后需重新下载与构建',
+      rebuild: '下次构建时重建',
+      executor: { type: 'stage' },
+    },
+    {
+      id: 'sys.yarn-cache',
+      title: 'Yarn 缓存（%LOCALAPPDATA%\\Yarn\\Cache）',
+      match: { kind: 'prefix', path: '{{LOCALAPPDATA}}/Yarn/Cache' },
+      grade: 'yellow',
+      reason: 'Yarn 包缓存，删后需重新下载',
+      rebuild: '按需重新下载',
+      executor: { type: 'stage' },
+    },
+    {
+      id: 'sys.composer-cache',
+      title: 'Composer 缓存（%LOCALAPPDATA%\\Composer\\cache）',
+      match: { kind: 'prefix', path: '{{LOCALAPPDATA}}/Composer/cache' },
+      grade: 'yellow',
+      reason: 'PHP Composer 包缓存，删后需重新下载',
+      rebuild: '按需重新下载',
+      executor: { type: 'stage' },
+    },
+    {
+      id: 'sys.firefox-cache',
+      title: 'Firefox 缓存（Profiles\\*\\cache2）',
+      match: { kind: 'glob', path: '{{LOCALAPPDATA}}/Mozilla/Firefox/Profiles/*/cache2' },
+      grade: 'green',
+      reason: 'Firefox 站点缓存，可自动重建；不涉及书签与密码（那些在 profile 其它子目录）',
+      rebuild: '自动重建',
+      executor: { type: 'stage' },
+    },
   ]
 }
 
@@ -297,6 +355,8 @@ export function systemVars(env = process.env) {
     SYSTEMDRIVE: env.SYSTEMDRIVE ?? '',
     // 用户主目录：~/.cargo、~/.m2、~/.nuget、~/.cache、~/.ollama 都挂在它下面
     USERPROFILE: env.USERPROFILE ?? '',
+    // Roaming：通讯/编辑器类应用的缓存在这里（Discord、Slack、VS Code…）
+    APPDATA: env.APPDATA ?? '',
     unmatchedRoots: [],
   }
 }
