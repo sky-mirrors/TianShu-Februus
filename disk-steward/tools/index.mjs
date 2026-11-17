@@ -45,7 +45,7 @@ export function createTools(deps = {}) {
         type: 'object',
         properties: {
           minBytes: { type: 'number', description: '只返回大于该字节数的项，默认 1MB' },
-          domain: { type: 'string', enum: ['tianshu', 'system', 'both'], description: '默认 tianshu；system 为系统域（扫描始终只读，非保护且未阻塞项需 disk_plan + 人工批准才可执行）' },
+          domain: { type: 'string', enum: ['tianshu', 'system', 'both'], description: '必须显式指定：tianshu=天枢自有数据（~/.rivet 与项目 .rivet）/ system=操作系统缓存与临时目录 / both=两侧。插件不提供默认值——清哪一侧是用户的选择，不能由调用方替用户猜。仅整盘扫描（fullDrive）时可省略' },
           includeSamples: { type: 'boolean', description: '默认 false：结果里的 item.samples 一律清空、不写真实文件名；显式 true 才记录样本文件名（会随 run 落盘）' },
           allDrives: { type: 'boolean', description: '默认 false：为 true 时额外扫描当前设备上的全部盘（盘级容量 + 每盘顶层条目），结果挂在 run.drives' },
           driveDepth: { type: 'string', enum: ['summary', 'deep'], description: '配合 allDrives：summary 只列顶层条目（秒级）；deep 对顶层项逐个 measure 出占用排序，受 budgetMs 预算约束' },
@@ -59,7 +59,15 @@ export function createTools(deps = {}) {
       timeoutMs: 60000,
       async execute(call) {
         const min = Number(call?.args?.minBytes ?? 1048576)
-        const domain = call?.args?.domain ?? 'tianshu'
+        // 清哪一侧由用户决定：不提供默认值。缺省直接拒绝，逼调用方先去问。
+        // fullDrive 是另一套口径（整盘），此时 domain 只用于摘要标注。
+        const domain = call?.args?.domain ?? (call?.args?.fullDrive === undefined ? null : 'both')
+        if (!domain) {
+          return {
+            content: 'SCAN_DOMAIN_REQUIRED: 必须先问用户要清哪一侧——domain="tianshu"（天枢自有数据）/ "system"（操作系统缓存与临时目录）/ "both"（两侧）。插件不替你选。',
+            isError: true,
+          }
+        }
         const rules = readRules()
         const vars = {
           ...tianshuVars({ projectRoot: projectRoot() }),

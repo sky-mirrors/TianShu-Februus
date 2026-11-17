@@ -113,13 +113,13 @@ test('disk_scan 工具层真正把 includeSamples 传到 buildRun（默认脱敏
     return item
   }
 
-  // 默认：脱敏
-  const redacted = loadItem(String((await scan.execute({ args: {} })).content))
+  // 默认：脱敏（W44 起 domain 必须显式给，不再有静默默认值）
+  const redacted = loadItem(String((await scan.execute({ args: { domain: 'tianshu' } })).content))
   assert.deepEqual(redacted.samples, [], '默认不得记录真实文件名')
   assert.equal(redacted.samplesRedacted, true)
 
   // 显式开启：落盘的 run 里带文件名
-  const shown = loadItem(String((await scan.execute({ args: { includeSamples: true } })).content))
+  const shown = loadItem(String((await scan.execute({ args: { domain: 'tianshu', includeSamples: true } })).content))
   assert.deepEqual(shown.samples, ['visible-name.txt'])
   assert.equal(shown.samplesRedacted, false)
 })
