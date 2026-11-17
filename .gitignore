@@ -7,3 +7,6 @@ disk-steward/.runs/
 disk-steward/.trash/
 disk-steward/dist/
 .tmp-xvol/
+
+# 本地开发工具目录（含打包产物与 node_modules），不入库
+.tmp-devkit/
