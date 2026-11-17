@@ -7,7 +7,7 @@ import { matchApproval } from '../core/approval.mjs'
 import { bucketAdvice } from '../core/advice.mjs'
 import { sweepDrive } from '../core/sweep.mjs'
 import { loadRules } from '../core/rules.mjs'
-import { buildRun, resolveVars, matchRule, computeTotals } from '../core/run.mjs'
+import { buildRun, resolveVars, matchRule, computeTotals, expandGlobFiles } from '../core/run.mjs'
 import { fmtBytes } from '../core/probe.mjs'
 import { createPlan, isStageable } from '../core/plan.mjs'
 import { stage, purge, undo, quarantineStats, quarantinePolicy, EXEC_ERRORS } from '../core/executor.mjs'
@@ -68,10 +68,21 @@ export function createTools(deps = {}) {
             isError: true,
           }
         }
-        const rules = readRules()
         const vars = {
           ...tianshuVars({ projectRoot: projectRoot() }),
           ...(call?.args?.includeSamples === true ? { includeSamples: true } : {}),
+        }
+        // glob 规则先展开成具体路径再交给 buildRun：后者是「路径存在就测量」，
+        // 带 `*` 的路径永远 exists=false，不展开则规则形同虚设。
+        const rules = []
+        for (const rule of readRules()) {
+          if (rule.match?.kind !== 'glob') {
+            rules.push(rule)
+            continue
+          }
+          for (const hit of await expandGlobFiles(resolveVars(rule.match.path, vars))) {
+            rules.push({ ...rule, match: { kind: 'prefix', path: hit } })
+          }
         }
         const run = await buildRun({
           rules,

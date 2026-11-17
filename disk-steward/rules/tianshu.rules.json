@@ -181,6 +181,34 @@
       "executor": {
         "type": "stage"
       }
+    },
+    {
+      "id": "ts.tool-stream",
+      "title": "工具输出流日志（~/.rivet/tool-stream-*.jsonl）",
+      "match": {
+        "kind": "glob",
+        "path": "{{rivetHome}}/tool-stream-*.jsonl"
+      },
+      "grade": "green",
+      "reason": "每次工具输出的流日志，仅作事后排查用，不承载长期价值",
+      "rebuild": "不可重建（历史日志），但缺失不影响任何功能",
+      "executor": {
+        "type": "stage"
+      }
+    },
+    {
+      "id": "ts.handoff-archive",
+      "title": "历史交接归档（~/.rivet/HANDOFF-archive-*.md）",
+      "match": {
+        "kind": "glob",
+        "path": "{{rivetHome}}/HANDOFF-archive-*.md"
+      },
+      "grade": "yellow",
+      "reason": "往期会话的交接文档归档；当前交接用 ~/.rivet/HANDOFF.md，归档建议只留最近几份",
+      "rebuild": "不可重建（历史记录）",
+      "executor": {
+        "type": "stage"
+      }
     }
   ]
 }

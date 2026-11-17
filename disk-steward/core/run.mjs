@@ -1,6 +1,6 @@
 // 一次扫描 = 一份 run。UI/TUI/工具都读这份对象的落盘副本（§14.1 唯一事实源）。
 import { readdir } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join, dirname, basename } from 'node:path'
 import { validateRule } from './rules.mjs'
 import { measure, exists } from './probe.mjs'
 import { buildExplain } from './explain.mjs'
@@ -44,12 +44,33 @@ export function resolveVars(input, vars) {
   return String(input).replace(/\{\{(\w+)\}\}/g, (m, k) => (vars[k] ?? m))
 }
 
-// 规则命中判定：按段边界比较，且分隔符无关（Windows 上 \\ 与 / 混用是常态）
+// 规则命中判定：按段边界比较，且分隔符无关（Windows 上 _ 与 / 混用是常态）
+
+// 把 glob 模式展开成同目录下真实存在的文件路径。
+// 为什么需要：buildRun 是「路径存在就测量」，带 `*` 的路径永远 exists=false，
+// 所以 glob 规则必须先展开成具体路径，再交给 buildRun。
+export async function expandGlobFiles(pattern) {
+  const dir = dirname(String(pattern))
+  const name = basename(String(pattern))
+  const re = globToRe(name.toLowerCase()) // Windows 上文件名比较大小写不敏感
+  try {
+    const entries = await readdir(dir, { withFileTypes: true })
+    return entries.filter((e) => e.isFile() && re.test(e.name.toLowerCase())).map((e) => join(dir, e.name))
+  } catch {
+    return []
+  }
+}
+
 export function matchRule(path, rule, vars) {
   // Windows 路径大小写不敏感：规则里的 {{WINDIR}}/Temp（C:\windows）与真实目录 C:\Windows 是同一个。
   // 旧实现逐字符比较 => C:\Windows\Temp 永远匹配不上，被归进「未收录」。
   const target = normalizePath(resolveVars(rule.match.path, vars)).toLowerCase()
   const p = normalizePath(path).toLowerCase()
+  // glob：* 不跨目录（只代表同目录下的文件名片段）。prefix 在目录边界就停，
+  // 因此 `{{rivetHome}}/tool-stream` 匹配不到 `tool-stream-2026.jsonl`。
+  if (rule.match.kind === 'glob') {
+    return globToRe(target).test(p) ? rule : null
+  }
   if (p !== target && !p.startsWith(target + '/')) return null
   return rule
 }
