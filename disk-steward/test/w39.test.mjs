@@ -19,12 +19,15 @@ test('W39：approval 必须是 user 角色消息的原文片段', () => {
   assert.equal(matchApproval({ approval: '全部删除', messages }).ok, false, '用户没说过就不算')
 })
 
-test('W39：否定语境不算批准（"不要删除"里也含"删除"）', () => {
+// 语义判断归天枢：插件只核实「这句话出自用户」，不猜它是不是授权。
+// 用户说「不要删除缓存目录」时，其中的「删除缓存目录」字面上确实出自用户——
+// 插件用词表判否定只会误伤（「不删 A，删 B」里 B 也是用户说的），
+// 所以是否构成批准由天枢理解对话后决定，不由插件猜。
+test('W39：插件只核实字面出处，不判语义（否定交由天枢理解）', () => {
   const messages = [{ role: 'user', content: '不要删除缓存目录' }]
   const r = matchApproval({ approval: '删除缓存目录', messages })
-  assert.equal(r.ok, false)
-  assert.equal(r.code, APPROVAL_ERRORS.NOT_IN_TRANSCRIPT)
-  assert.match(r.reason, /否定语境/)
+  assert.equal(r.ok, true, '这句话确实是用户说的，插件据实承认')
+  assert.match(r.quote, /删除缓存目录/)
 })
 
 test('W39：拿不到会话记录时 fail-closed，不猜', () => {

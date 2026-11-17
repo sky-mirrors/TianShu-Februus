@@ -72,7 +72,7 @@ npm run plugin -- status rel_disk_steward_<version>
 
 - **它真的会删文件**：8 个工具里 `disk_exec` 有写入权（`fs` 权限的实质来源）。防线是四层，缺一层就不执行：
   1. `disk_plan` 只对非保护、未被挡、可 stage 的项签发一次性令牌（10 分钟过期）；
-  2. `disk_exec` / `disk_undo` 的 `approval` 不能只是非空字符串：插件用 `host.transcripts.read(sessionId)` 回到本会话记录，只认 `role === 'user'` 消息里的原文片段，助手自己写的话、否定语境（"不要删除"）都不算；宿主未提供会话记录时直接 `EXEC_APPROVAL_UNVERIFIABLE` 拒绝；
+  2. `disk_exec` / `disk_undo` 的 `approval` 不能只是非空字符串：插件用 `host.transcripts.read(sessionId)` 回到本会话记录，只认 `role === 'user'` 消息里的原文片段，助手自己写的话不算；宿主未提供会话记录时直接 `EXEC_APPROVAL_UNVERIFIABLE` 拒绝。插件只核实字面出处，**不判断这句话是否构成授权**——「不要删除」「不删 A 删 B」这类语义由天枢理解对话后决定，不做词表启发式；
   3. 默认 `mode=stage` 只是移入隔离区（可 `disk_undo` 撤销），`mode=purge` 永久删除另需批次已 staged + 同一令牌；
   4. 执行期对每个目标重新 `realpath` 判禁区、重新取 dev+ino+size+mtime 与扫描时比对，不符即回滚并记 `abort`。
 - **写到哪里**：台账、run 落盘、隔离区都在宿主 `storage.dataDir()` 之下（`<dataDir>/runs`、`<dataDir>/trash`），不写插件安装目录——安装目录是随时可被更新/卸载替换的发行包。
