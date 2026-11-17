@@ -72,7 +72,12 @@ export function createTools(deps = {}) {
           refIndexDeps: { cachePath: join(state, 'refcache.json'), ttlMs: 60000 },
         })
 
-        const sys = domain === 'tianshu' ? null : await scanSystem({ execEnabled: call?.args?.systemExec === true })
+        // 整盘扫描不分域：全盘口径下系统缓存（Edge/Temp 等）就是盘里的东西，
+        // 而它们的真实路径在第 7~10 层，靠加深 sweep 深度去够代价是分钟级——
+        // 系统域本来就直接测这些白名单目标，所以 fullDrive 时一并纳入。
+        const sys = domain === 'tianshu' && call?.args?.fullDrive === undefined
+          ? null
+          : await scanSystem({ execEnabled: call?.args?.systemExec === true })
         const extra = sys
           ? `\n[系统域] ${sys.items.length} 项 / ${fmtBytes(sys.totals.bytes)}，可执行项需 disk_plan + 人工批准；` +
             `禁区拦截 ${sys.denied.length} 条` +
