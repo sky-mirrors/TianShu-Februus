@@ -24,17 +24,17 @@
 
 ---
 
-## 当前状态（每个数字都在 2026-11-06 现场核对）
+## 当前状态（每个数字都在 2026-11-17 现场核对）
 
 | 项 | 数值 | 怎么核 |
 |---|---|---|
 | 工具 | **8** 个 | `createTools().length`；名字见「工具面」节 |
-| 测试 | **173 用例 / 37 个文件**，全绿 | `npm test`（`scripts.test = node --test`），exit 0，约 32s |
+| 测试 | **240 用例 / 50 个文件**，全绿 | `npm test`（`scripts.test = node --test`），exit 0，约 166s |
 | 类型检查 | `tsc --noEmit` **exit 0** | `../node_modules/.bin/tsc --noEmit` |
-| 规则 | 天枢域 **13** 条、系统域 **9** 条 | `rules/tianshu.rules.json`、`domains/system.mjs` |
-| 硬禁区 | **9** 类（`core/guard.mjs` 的 `RULES`） | 逐条见「安全模型」节 |
-| 代码量 | **64 个 `.mjs` / 5739 行**（含测试） | `find . -name '*.mjs' -not -path './node_modules/*' \| wc -l` |
-| 台账 | `.runs/ledger.jsonl` **20 行**：`intent` 5、`stage` 5、`batch` 5、`undo` 4、`abort` 1，无 `purge` | 该文件按 `action` 计数 |
+| 规则 | 天枢域 **21** 条、系统域 **35** 条 | `rules/tianshu.rules.json`、`domains/system.mjs` |
+| 硬禁区 | **9** 类（`core/guard.mjs` 的 `DENY`） | 逐条见「安全模型」节 |
+| 代码量 | **81 个 `.mjs` / 7287 行**（含测试；生产代码 31 个） | `find . -name '*.mjs' -not -path './node_modules/*' \| wc -l` |
+| 台账 | `<dataDir>/runs/ledger.jsonl` **32 行**：`intent` 11、`stage` 10、`batch` 3、`undo` 1、`abort` 1、`purge` 6 | 该文件按 `action` 计数 |
 
 台账是运行期数据，数字会随使用变化；上表是核对时刻的快照，不是恒定值。
 
@@ -42,10 +42,10 @@
 
 ## 快速开始
 
-工作目录 `disk-steward/`。运行代码零依赖；类型检查依赖仓库根的 `typescript` 与 `@types/node`。
+工作目录 `disk-steward/`。运行代码零依赖；类型检查依赖仓库根的 `typescript` 与 `@types/node`。要求 Node.js >= 22（`engines`；引用图用 `node:sqlite`，盘符枚举用 `fs.statfs`）。
 
 ```bash
-# 测试（173 用例 / 37 文件）
+# 测试（240 用例 / 50 文件）
 npm test                       # 等价于 node --test
 node --test test/w36.test.mjs  # 单文件
 
@@ -151,8 +151,8 @@ flowchart TD
   E --> Q[quarantine 隔离区]
   Q --> POL[quarantinePolicy 保留期/容量判定]
   POL --> ST[disk_status 告警]
-  R --> D1[tianshu 域规则 13 条]
-  R --> D2[system 域规则 9 条]
+  R --> D1[tianshu 域规则 21 条]
+  R --> D2[system 域规则 35 条]
   DR --> D3[盘级信息 + 顶层条目 + denied]
   O --> RP[render/report 清单与报告]
 ```
@@ -369,18 +369,18 @@ disk-steward/
     drives.mjs             # 盘符枚举（statfs 探测 A–Z，不调 wmic/PowerShell）
   domains/
     tianshu.mjs            # 天枢域目录语义与 vars
-    system.mjs             # 系统域 9 条规则 + execEnabled 开关
+    system.mjs             # 系统域 35 条规则 + execEnabled 开关
     drives.mjs             # 全盘扫描（summary / deep，预算按盘平摊）
   render/
     table.mjs tui.mjs      # 列表/详情/勾选状态机（纯函数）
     confirm.mjs            # 删除确认页（是什么/多大/能否撤回 + [y/N]）
     report.mjs             # Markdown 清单与对比（含域标注与分域小计）
-  rules/tianshu.rules.json # 13 条天枢域规则
+  rules/tianshu.rules.json # 21 条天枢域规则
   bin/
     scan.mjs               # 只读文本面板
     tui.mjs                # 交互面板（--allow-exec / --only-project / --with-system / --script）
     purge.mjs              # 隔离区人工释放（--batch / --yes / --by）
-  test/                    # 37 个测试文件 / 173 用例
+  test/                    # 50 个测试文件 / 240 用例
 ```
 
 ---

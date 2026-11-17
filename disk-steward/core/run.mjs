@@ -1,6 +1,7 @@
 // 一次扫描 = 一份 run。UI/TUI/工具都读这份对象的落盘副本（§14.1 唯一事实源）。
 import { readdir } from 'node:fs/promises'
 import { join, dirname, basename } from 'node:path'
+import { randomBytes } from 'node:crypto'
 import { validateRule } from './rules.mjs'
 import { measure, exists } from './probe.mjs'
 import { buildExplain } from './explain.mjs'
@@ -267,7 +268,9 @@ export async function buildRun({
   const totals = computeTotals(items, unmatched)
 
   return {
-    runId: `r-${now.toString(36)}`,
+    // runId 带随机后缀：只用时间戳的话，同一毫秒的两次并发扫描会得到同一个 id，
+    // 落盘时后者覆盖前者（实测 Promise.all 两次扫描返回同一 run_id）
+    runId: `r-${now.toString(36)}-${randomBytes(3).toString('hex')}`,
     domain: vars.domain ?? 'tianshu',
     createdAt: now,
     items,

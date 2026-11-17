@@ -56,7 +56,7 @@ flowchart TB
 ```bash
 cd disk-steward
 
-# 测试：237 用例 / 50 个文件
+# 测试：240 用例 / 50 个文件
 npm test                        # 等价于 node --test
 node --test test/w36.test.mjs   # 单文件
 
@@ -100,7 +100,7 @@ disk-steward/
   render/                  # 文本面板、TUI 状态机、确认页、Markdown 报告
   rules/tianshu.rules.json # 天枢域规则（白名单）
   bin/                     # scan.mjs / tui.mjs / purge.mjs
-  test/                    # 237 用例 / 50 个文件
+  test/                    # 240 用例 / 50 个文件
   dist/                    # 发行目录，由 scripts/pack-release.mjs 生成（不入库）
 docs/                      # 架构设计、生态调研、边界对照
 ```
@@ -109,7 +109,7 @@ docs/                      # 架构设计、生态调研、边界对照
 
 | 项 | 数值 | 怎么核 |
 |---|---|---|
-| 测试 | **237 用例 / 50 个文件，全绿**（`pass 237 / fail 0`，约 131s） | `npm test` |
+| 测试 | **240 用例 / 50 个文件，全绿**（`pass 240 / fail 0`，约 166s） | `npm test` |
 | 工具 | **8** 个 | `createTools().length` |
 | 规则 | 天枢域 **21** 条（stage 12 / compact 2 / protected 7）、系统域 **35** 条 | `rules/tianshu.rules.json`、`domains/system.mjs` |
 | 硬禁区 | **9** 类 | `core/guard.mjs` 的 `DENY` |
@@ -120,6 +120,7 @@ docs/                      # 架构设计、生态调研、边界对照
 ## 平台与已知限制
 
 - **Windows 优先**：`system` 域规则基于 Windows 路径语义；非 Windows 平台上前置条件探测返回 `unknown` 并按 fail-closed 处理（不执行）。
+- **Node.js >= 22**（`package.json` 的 `engines`）：引用图用到 `node:sqlite`，盘符枚举用到 `fs.statfs`。
 - **只在天枢宿主内可完整运行**：`index.js` 需要宿主注入 `globalThis.__tianshuTPI`，否则直接抛错；CLI（`bin/`）是独立的非宿主路径。
 - **批准证据的强度**：CLI 路径下没有宿主会话记录，`approvalEvidence` 为空时执行类工具会 fail-closed；TUI 与 `bin/purge.mjs` 由本地人当场键入提供批准事实。工具面的 `approval` 通道挡得住「模型没问就执行」，挡不住「模型编一句批准」——机器可验证的批准需要宿主批准 UI 支撑。
 - **未在 macOS / Linux 实测**。

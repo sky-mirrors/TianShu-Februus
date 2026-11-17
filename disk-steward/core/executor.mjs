@@ -207,12 +207,21 @@ export async function undo({ batchId, ledgerPath, now = Date.now() }) {
   const rows = readLedger(ledgerPath).filter(
     (r) =>
       r.batchId === batchId &&
-      ['stage', 'done', 'file-stage', 'file-intent'].includes(r.action) &&
+      ['stage', 'done', 'file-stage', 'file-intent', 'intent'].includes(r.action) &&
       r.undoSupported,
+  )
+  // intent 是兜底凭据：正常批次里它已被同 item 的 stage/done 行取代，只有
+  // 「移动完成、stage 行没落」的崩溃批次才靠它。不排除的话同一条目会被处理两次
+  // （先按 stage 恢复成功，再按 intent 命中"目标已存在"记一条噪声 skip）。
+  const covered = new Set(
+    rows.filter((r) => r.action !== 'intent' && r.action !== 'file-intent').map((r) => r.itemId),
+  )
+  const recoverable = rows.filter(
+    (r) => (r.action !== 'intent' && r.action !== 'file-intent') || !covered.has(r.itemId),
   )
   let restored = 0
   const skipped = []
-  for (const r of [...rows].reverse()) {
+  for (const r of [...recoverable].reverse()) {
     if (existsSync(r.from)) { skipped.push({ from: r.from, reason: '目标已存在，跳过不猜测' }); continue }
     if (!existsSync(r.to)) { skipped.push({ from: r.from, reason: '隔离区条目已不在' }); continue }
     mkdirSync(dirname(r.from), { recursive: true })

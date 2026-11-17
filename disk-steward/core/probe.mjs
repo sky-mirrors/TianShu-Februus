@@ -43,6 +43,13 @@ export async function measure(path, { sampleLimit = 3, extLimit = 4, deadline = 
         return // 无权限：跳过，不猜测（不吞掉的是"跳过了"这个事实）
       }
       for (const e of entries) {
+        if (partial) return
+        // 预算必须在文件级也检查：只在进入目录时检查的话，单层几万个文件
+        // 会一路 stat 到底（整盘深扫实测超预算 27.8s），deadline 形同虚设
+        if ((fileCount & 63) === 0 && Date.now() > deadline) {
+          partial = true
+          return
+        }
         const p = join(dir, e.name)
         if (e.isSymbolicLink()) continue // 不跟随符号链接（§7.4 规则 1）
         if (e.isDirectory()) { await walk(p); continue }
