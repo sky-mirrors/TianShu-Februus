@@ -130,7 +130,7 @@ purge：永久删除，只限本批次已 staged 的项
 - **活跃窗口**：10 分钟内有写入（`mtimeGuard`）的项标记 `blocked: 'active'`，不进计划。
 - **前置条件 fail-closed**：`processNotRunning` / `serviceStopped` / `fileExists` 不满足即阻塞；不认识的类型一律不通过。
 - **执行期重验**：stage 前对每个目标取 dev+ino+size+mtime 快照，与扫描时对比；移动后再比一次，不符即回滚并记 `abort`。
-- **引用图**：产物按 `expand: 'refs'` 展开为节点，被引用数决定分级；任何来源不可读 → 节点标 `refScanIncomplete` → **永不判 green**。增量索引 60s TTL，过期秒数写进 item，plan 层据此拒绝（遇到 `PLAN_REFUSED_STALE_REFS` 说明该重新扫描，删 `<插件目录>/.runs/refcache.json` 可强制重建）。
+- **引用图**：产物按 `expand: 'refs'` 展开为节点，被引用数决定分级；任何来源不可读 → 节点标 `refScanIncomplete` → **永不判 green**。增量索引 60s TTL，过期秒数写进 item，plan 层据此拒绝（遇到 `PLAN_REFUSED_STALE_REFS` 说明该重新扫描，删 `<宿主 dataDir>/runs/refcache.json` 可强制重建）。
 
 ---
 
@@ -242,7 +242,7 @@ flowchart TD
 
 ## 台账与撤销
 
-默认路径 `<插件目录>/.runs/ledger.jsonl`（可用 `createTools({ stateDir })` 注入），append-only，一行一次状态变更：
+默认路径 `<宿主 dataDir>/runs/ledger.jsonl`——真机由 `activate(host)` 用 `host.storage.dataDir()` 注入；非宿主调用（测试、`bin/` 下的 CLI）落 `%USERPROFILE%\.rivet\plugins\disk-steward\data\runs`，推导只有一处（`core/paths.mjs`）。append-only，一行一次状态变更：
 
 ```json
 {"ts":1793807474110,"batchId":"b-mw2anlbyd55c16","action":"stage","itemId":"ts.cache#1",

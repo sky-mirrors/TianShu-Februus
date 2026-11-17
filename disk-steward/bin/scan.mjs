@@ -4,6 +4,7 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
+import { pluginStatePaths, defaultHostDataDir } from '../core/paths.mjs'
 import { loadRules } from '../core/rules.mjs'
 import { buildRun } from '../core/run.mjs'
 import { renderTable, renderDetail } from '../render/table.mjs'
@@ -18,7 +19,8 @@ export async function scan({ projectRoot = process.cwd(), writeRun = true } = {}
   const vars = tianshuVars({ projectRoot })
   const run = await buildRun({ rules, vars })
   if (writeRun) {
-    const dir = join(root, '.runs')
+    // run 落盘进宿主数据目录（core/paths.mjs），不写插件安装目录
+    const dir = pluginStatePaths(defaultHostDataDir()).stateDir
     mkdirSync(dir, { recursive: true })
     writeFileSync(join(dir, `${run.runId}.json`), JSON.stringify(run, null, 1))
   }

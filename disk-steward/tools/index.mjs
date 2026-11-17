@@ -2,6 +2,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
+import { pluginStatePaths, defaultHostDataDir } from '../core/paths.mjs'
 import { loadRules } from '../core/rules.mjs'
 import { buildRun, resolveVars, matchRule, computeTotals } from '../core/run.mjs'
 import { fmtBytes } from '../core/probe.mjs'
@@ -15,9 +16,10 @@ import { listDrives } from '../core/drives.mjs'
 import { scanDrives } from '../domains/drives.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
-const stateDir = join(root, '.runs')
-const ledgerPath = join(stateDir, 'ledger.jsonl')
-const quarantineRoot = join(root, '.trash')
+// 默认落宿主数据目录，不是插件安装目录（安装目录是可替换的发行包）。
+// 真实宿主的 activate(host) 注入 host.storage.dataDir()（见 index.js）；
+// 这里的默认值只给非宿主调用（测试、bin/ 下的 CLI）。
+const { stateDir, ledgerPath, quarantineRoot } = pluginStatePaths(defaultHostDataDir())
 const plans = new Map() // planId -> plan（进程内；令牌一次性、10 分钟过期）
 const readRules = () => loadRules(JSON.parse(readFileSync(join(root, 'rules', 'tianshu.rules.json'), 'utf8')))
 
@@ -130,7 +132,7 @@ export function createTools(deps = {}) {
           ].filter(Boolean)
           out.push(
             `隔离区              ${q.batches} 批 / ${q.items} 项 / ${fmtBytes(q.bytes)} / 最老 ${q.oldestDays} 天` +
-              (q.items ? '（node bin/purge.mjs 释放）' : '') +
+              (q.items ? '（永久删除走 disk_exec mode=purge，需人工批准）' : '') +
               (alerts.length ? '｜' + alerts.join('｜') : ''),
           )
         } catch (e) {

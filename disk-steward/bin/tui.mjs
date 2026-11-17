@@ -4,6 +4,7 @@
 import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
+import { pluginStatePaths, defaultHostDataDir } from '../core/paths.mjs'
 import { readFileSync } from 'node:fs'
 import { loadRules } from '../core/rules.mjs'
 import { buildRun } from '../core/run.mjs'
@@ -16,8 +17,8 @@ import { createSession, handleKey, renderFrame } from '../render/tui.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const root = join(here, '..')
-const ledgerPath = join(root, '.runs', 'ledger.jsonl')
-const quarantineRoot = join(root, '.trash')
+// 状态目录与插件工具面同源（core/paths.mjs）；root 只用来读随包发行的 rules/
+const { ledgerPath, quarantineRoot } = pluginStatePaths(defaultHostDataDir())
 
 const argv = process.argv.slice(2)
 /** @returns {string | null} */

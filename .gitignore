@@ -5,4 +5,5 @@ node_modules/
 .rivet/
 disk-steward/.runs/
 disk-steward/.trash/
+disk-steward/dist/
 .tmp-xvol/

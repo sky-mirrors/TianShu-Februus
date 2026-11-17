@@ -1,0 +1,86 @@
+# disk-steward 发行与提交审核
+
+本文只记录「怎么把它交到 XiaoSi 插件库官方审核」这一步。插件本体说明见 README.md。
+
+## 现状（本地已实测）
+
+| 步骤 | 命令 | 结果 |
+|---|---|---|
+| 生成发行目录 | `node scripts/pack-release.mjs` | 24 个文件（入口闭包 21 + rules 数据 1 + 清单 + 包声明） |
+| 官方打包 | `npm run plugin -- pack <dist> <zip> --release-id … --publisher-id … --source-commit … --platforms win32-x64` | 生成 ZIP（114 509 字节） |
+| 官方校验 | `npm run plugin -- validate <zip> --lane official_reviewed` | `valid: true`，`artifact_sha256 9f9c3cea…`，`manifest_sha256 12c0f1f9…` |
+
+校验器用的就是 developer-kit 里的 `src/artifacts.ts`（`inspectArtifact`），与注册中心入库校验同一套 schema；宿主侧的 `parseTpiManifest` 也单独跑过，接受这份清单。
+
+`dist/` 与 ZIP 都是生成物，不入库（见 `.gitignore`）。**改动源码后必须重新生成，不要复用旧 ZIP。**
+
+## 谁必须提供（我无法代填）
+
+1. `publisher_id` —— 开发者中心 `/developers/authorization` 完成发布者核验后由平台分配。上面的 `REPLACE_WITH_PUBLISHER_ID` 是占位符，真提交前替换。
+2. `--source-url` —— 插件的 HTTPS 源码地址（`submit` 必填）。
+3. `--license` —— 软件许可证。仓库里目前没有 LICENSE 文件，发行方需要在提交时给出 SPDX 标识（如 `MIT`）。
+4. `--data-use` —— 数据用途说明（见下「数据与隐私」可直接引用）。
+5. `--release-notes` —— 版本说明。
+6. `--source-commit` —— **打包所用源码的完整 40 位 Git 提交哈希**。当前这份 ZIP 用的是 `b3e3334…`（本次改动之前的 HEAD），提交前请先 commit 再重新打包，让哈希与实际源码一致。
+
+## 提交命令
+
+```sh
+# 1) 重新生成发行目录（源码改动后必须做）
+node scripts/pack-release.mjs
+
+# 2) 打包（publisher-id 换成自己的，platforms 只写自己验证过的）
+npm run plugin -- pack ./dist ./disk-steward-<version>.zip \
+  --release-id rel_disk_steward_<version> \
+  --publisher-id <publisher_id> \
+  --source-commit <完整 40 位 commit> \
+  --platforms win32-x64
+
+# 3) 校验（本地，等价于入库那套规则）
+npm run plugin -- validate ./disk-steward-<version>.zip --lane official_reviewed
+
+# 4) 提交（走 CI 时也用它，凭据从 XPI_PUBLISHER_TOKEN 读）
+export XPI_ORIGIN=https://xiaosiai.cn
+export XPI_PUBLISHER_TOKEN=XSPCI1_…
+npm run plugin -- submit ./disk-steward-<version>.zip --lane official_reviewed \
+  --source-url <HTTPS 源码地址> --license <SPDX> \
+  --data-use '<见下>' --release-notes '<版本说明>'
+
+# 5) 跟踪
+npm run plugin -- status rel_disk_steward_<version>
+```
+
+`pack` / `validate` / `submit` 分别需要 `packages:validate` / `releases:submit` / `releases:read` 权限，凭据在发布者后台按插件和分区签发。
+
+## 清单里每个字段的取值依据
+
+| 字段 | 值 | 依据 |
+|---|---|---|
+| `$tpi` / `kind` / `runtime` | `1.0` / `tianshu.plugin` / `agent` | 插件库首期只收 TPI 1.0 纯 JavaScript agent 包 |
+| `id` | `disk-steward` | 不在保留名单（`xiaosi-axiom` 为内置），与入口 `index.js` 的 `defineTianshuPlugin({ id })` 一致 |
+| `version` | `0.1.0` | 稳定 SemVer，无预发布标记。首发审核若按「第一个可用发行」处理，可改 `1.0.0` 后重打包 |
+| `entry` | `index.js` | 包内相对路径，非空 UTF-8 JS |
+| `capabilities` | `tools`, `storage` | 工具面 + `activate(host)` 用 `host.storage.dataDir()` |
+| `contributes.tools` | 8 个 | 与 `createTools()` 返回的工具名一一对应（`test/w33.test.mjs` 断言） |
+| `contributes.lifecycle` | `[]` | 插件不挂生命周期钩子 |
+| `permissions.fs` | `true` | 扫描/移动/删除文件 |
+| `permissions.shell` | `true` | `spawnSync` 调 `tasklist`、`sc.exe`、`net`（前置条件与提权检测） |
+| `permissions.net` | `false` | 无任何网络访问 |
+| `engines.tianshu` | `>=4.0.2 <5.0.0` | 打包器强制要求；发行记录里的 `compatibility.core` 与它必须一致 |
+
+## 审核会被追问的几处，先说清
+
+- **它真的会删文件**：8 个工具里 `disk_exec` 有写入权（`fs` 权限的实质来源）。防线是四层，缺一层就不执行：
+  1. `disk_plan` 只对非保护、未被挡、可 stage 的项签发一次性令牌（10 分钟过期）；
+  2. `disk_exec` 要求 `approval` 参数里带用户本轮明确同意执行的原话，缺失直接拒绝（`EXEC_NOT_HUMAN_APPROVED`）；
+  3. 默认 `mode=stage` 只是移入隔离区（可 `disk_undo` 撤销），`mode=purge` 永久删除另需批次已 staged + 同一令牌；
+  4. 执行期对每个目标重新 `realpath` 判禁区、重新取 dev+ino+size+mtime 与扫描时比对，不符即回滚并记 `abort`。
+- **写到哪里**：台账、run 落盘、隔离区都在宿主 `storage.dataDir()` 之下（`<dataDir>/runs`、`<dataDir>/trash`），不写插件安装目录——安装目录是随时可被更新/卸载替换的发行包。
+- **第三方依赖**：零。`scripts/pack-release.mjs` 会走 import 图，遇到非 `node:` 且非相对路径的 import 直接报错，发行包里不可能带 `node_modules`。
+- **原生二进制 / 安装脚本**：无（纯 ESM JS，`package.json` 只有标识字段，无 `scripts`、无 `dependencies`——这也是打包器 `validateFile` 的硬性要求）。
+- **生命周期与脚本钩子**：无。因此也满足 `paid_unreviewed` 分区的形态要求（该分区要求贡献工具、禁止 lifecycle 与 hooks）——当前宿主阻止未审核付费包执行，先走 `official_reviewed`。
+- **隐私**：扫描只读体积与路径，不读文件内容；`includeSamples` 默认关闭，结果里的样本文件名一律清空，显式 `true` 才会记录。`disk_report` 生成的是体积清单与逐项解释，不含文件内容。
+
+## 数据与隐私（可直接作为 `--data-use` 文本）
+
+> 不收集、不上传任何用户数据。插件在本机运行，无网络访问（`permissions.net=false`）。扫描仅统计路径与占用体积，不读取文件内容；样本文件名默认脱敏。台账、扫描结果与隔离区文件仅写入本机宿主数据目录，供撤销与审计使用，不离开本机。

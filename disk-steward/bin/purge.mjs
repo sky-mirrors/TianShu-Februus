@@ -1,14 +1,12 @@
 #!/usr/bin/env node
 // 人工面：重启后释放隔离区空间。必须由人在终端确认（或显式 --yes + --by <name>）。
 import { createInterface } from 'node:readline'
-import { fileURLToPath } from 'node:url'
-import { dirname, join } from 'node:path'
+import { pluginStatePaths, defaultHostDataDir } from '../core/paths.mjs'
 import { purgeBatch, quarantineStats } from '../core/executor.mjs'
 import { fmtBytes } from '../core/probe.mjs'
 
-const root = join(dirname(fileURLToPath(import.meta.url)), '..')
-const ledgerPath = join(root, '.runs', 'ledger.jsonl')
-const quarantineRoot = join(root, '.trash')
+// 与插件工具面同一处推导：状态目录在宿主数据目录下，不在安装目录里（见 core/paths.mjs）
+const { ledgerPath, quarantineRoot } = pluginStatePaths(defaultHostDataDir())
 
 const argv = process.argv.slice(2)
 const flag = (n) => { const i = argv.indexOf(`--${n}`); return i >= 0 ? argv[i + 1] : null }
