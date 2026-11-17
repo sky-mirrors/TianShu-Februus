@@ -209,6 +209,82 @@
       "executor": {
         "type": "stage"
       }
+    },
+    {
+      "id": "ts.project-artifacts",
+      "title": "项目级历史产物（按引用图判定）",
+      "match": {
+        "kind": "prefix",
+        "path": "{{projectRivetHome}}/artifacts"
+      },
+      "expand": "refs",
+      "grade": "green",
+      "reason": "以引用图判定：被引用即保护，零引用且过冷却期才可回收",
+      "rebuild": "不可重建（需重新生成）",
+      "executor": {
+        "type": "stage"
+      }
+    },
+    {
+      "id": "ts.project-db",
+      "title": "项目记忆库（<项目>/.rivet/meridian.db）",
+      "match": {
+        "kind": "prefix",
+        "path": "{{projectRivetHome}}/meridian.db"
+      },
+      "grade": "brown",
+      "reason": "项目会话与记忆主库，删除等于失忆；只允许 VACUUM 压实",
+      "rebuild": "不可重建"
+    },
+    {
+      "id": "ts.project-db-wal",
+      "title": "项目记忆库 WAL",
+      "match": {
+        "kind": "prefix",
+        "path": "{{projectRivetHome}}/meridian.db-wal"
+      },
+      "grade": "blue",
+      "reason": "SQLite 预写日志，只能在数据库关闭时 checkpoint 合并；直接删会丢未落盘的写入",
+      "rebuild": "由 SQLite 自行管理",
+      "executor": {
+        "type": "compact"
+      }
+    },
+    {
+      "id": "ts.project-skills",
+      "title": "项目级技能",
+      "match": {
+        "kind": "prefix",
+        "path": "{{projectRivetHome}}/skills"
+      },
+      "grade": "brown",
+      "reason": "项目内已安装的技能，删除会失去对应能力",
+      "rebuild": "需重新安装"
+    },
+    {
+      "id": "ts.project-knowledge",
+      "title": "项目级知识库",
+      "match": {
+        "kind": "prefix",
+        "path": "{{projectRivetHome}}/knowledge"
+      },
+      "grade": "brown",
+      "reason": "沉淀的项目知识与索引，永不自动删",
+      "rebuild": "不可重建"
+    },
+    {
+      "id": "ts.project-handoff",
+      "title": "项目级交接文档（<项目>/.rivet/HANDOFF-*.md）",
+      "match": {
+        "kind": "glob",
+        "path": "{{projectRivetHome}}/HANDOFF-*.md"
+      },
+      "grade": "yellow",
+      "reason": "往期会话的交接文档，建议只保留最近几份",
+      "rebuild": "不可重建（历史记录）",
+      "executor": {
+        "type": "stage"
+      }
     }
   ]
 }
