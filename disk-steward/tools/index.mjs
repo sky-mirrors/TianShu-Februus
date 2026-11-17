@@ -3,6 +3,8 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { pluginStatePaths, defaultHostDataDir } from '../core/paths.mjs'
+import { matchApproval } from '../core/approval.mjs'
+import { bucketAdvice } from '../core/advice.mjs'
 import { loadRules } from '../core/rules.mjs'
 import { buildRun, resolveVars, matchRule, computeTotals } from '../core/run.mjs'
 import { fmtBytes } from '../core/probe.mjs'
@@ -31,6 +33,8 @@ export function createTools(deps = {}) {
   const quarantine = deps.quarantineRoot ?? quarantineRoot
   // 保留期/容量阈值可注入：默认走 quarantinePolicy 自身的默认值
   const policyOptions = deps.quarantinePolicyOptions ?? {}
+  // 批准证据来源（宿主会话记录）。缺失时返回 null → 执行类工具 fail-closed。
+  const approvalEvidence = deps.approvalEvidence
 
   return [
     {
@@ -98,7 +102,16 @@ export function createTools(deps = {}) {
               (driveScan.deep ? `｜顶层项合计 ${driveScan.drives.reduce((n, d) => n + d.topTotal, 0)}，未测 ${driveScan.drives.reduce((n, d) => n + d.unmeasured, 0)}` : '') +
               (driveScan.denied.length ? `｜禁区拦截 ${driveScan.denied.length} 条` : '')
             : '')
-        return { content: `${summary}\n${JSON.stringify(top, null, 1)}` }
+        // 建议层：分级不是结论。用户要的是「这个删不删、不删的话它到底是什么」
+        const advice = bucketAdvice(merged.items)
+        const adviceSection = [
+          `[建议] 建议清理 ${advice.clean.length} 项 / 谨慎 ${advice.caution.length} 项 / 不建议删除 ${advice.keep.length} 项`,
+          ...[...advice.clean, ...advice.caution, ...advice.keep]
+            .sort((a, b) => (b.item.bytes ?? 0) - (a.item.bytes ?? 0))
+            .slice(0, 12)
+            .map((a) => `· [${a.label}] ${a.item.title} ${fmtBytes(a.item.bytes ?? 0)} — ${a.reason}`),
+        ].join('\n')
+        return { content: `${summary}\n${adviceSection}\n${JSON.stringify(top, null, 1)}` }
       },
     },
     {
@@ -271,12 +284,12 @@ export function createTools(deps = {}) {
       async execute(call) {
         const plan = plans.get(call?.args?.planId)
         if (!plan) return { content: 'EXEC_PLAN_NOT_FOUND: 请重新 disk_plan', isError: true }
-        // 边界："人批准过"这个事实只从对话进来，缺它不往下走（agent 计划不得执行）
-        const approval = typeof call?.args?.approval === 'string' ? call.args.approval.trim() : ''
-        if (!approval) {
-          return { content: `EXEC_NOT_HUMAN_APPROVED: ${EXEC_ERRORS.NOT_HUMAN_APPROVED}——先把计划逐项给用户看并取得同意，再把用户原话作为 approval 传入`, isError: true }
+        // 边界："人批准过"只能从会话记录里核实（approval 是模型能填的字符串，单看非空等于自批）
+        const check = matchApproval({ approval: call?.args?.approval, messages: approvalEvidence?.() })
+        if (check.ok !== true) {
+          return { content: `${check.code}: ${check.reason}——先把计划逐项给用户看并取得同意；approval 必须逐字取自本会话里用户自己发的消息`, isError: true }
         }
-        const approved = { ...plan, issuer: 'human', confirmedBy: `chat:${approval}` }
+        const approved = { ...plan, issuer: 'human', confirmedBy: `chat:${check.quote}` }
         try {
           if (call.args.mode === 'stage') {
             const r = await stage({ plan: approved, token: call.args.token, items: plan.items, quarantineRoot: quarantine, ledgerPath: ledger })
@@ -304,9 +317,9 @@ export function createTools(deps = {}) {
       concurrencySafe: false,
       timeoutMs: 120000,
       async execute(call) {
-        const approval = typeof call?.args?.approval === 'string' ? call.args.approval.trim() : ''
-        if (!approval) {
-          return { content: `EXEC_NOT_HUMAN_APPROVED: ${EXEC_ERRORS.NOT_HUMAN_APPROVED}——撤销会动磁盘，先把要撤销的批次给用户看并取得同意，再把用户原话作为 approval 传入`, isError: true }
+        const check = matchApproval({ approval: call?.args?.approval, messages: approvalEvidence?.() })
+        if (check.ok !== true) {
+          return { content: `${check.code}: ${check.reason}——撤销会动磁盘，先把要撤销的批次给用户看并取得同意；approval 必须逐字取自本会话里用户自己发的消息`, isError: true }
         }
         try {
           const r = await undo({ batchId: call.args.batchId, ledgerPath: ledger })

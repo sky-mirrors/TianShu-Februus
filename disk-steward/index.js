@@ -29,5 +29,18 @@ export default sdk.defineTianshuPlugin({
   id: 'disk-steward',
   // activate 的返回契约为 { tools }；工具对象字段名（inputSchema / execute({args}) /
   // concurrencySafe / requiresApproval / timeoutMs）由宿主 wrapTpiTool 直接消费。
-  activate: (host) => ({ tools: createTools(pluginState(host)) }),
+  activate: (host) => {
+    // 「人批准过」的证据只从宿主的会话记录读（host.transcripts），不信任 approval 参数本身：
+    // 参数是模型能填的字符串，会话记录里 user 角色的消息才是用户真的说过。
+    // 宿主没提供 transcripts → 返回 null → 执行类工具 fail-closed（EXEC_APPROVAL_UNVERIFIABLE）。
+    const approvalEvidence = () => {
+      if (typeof host.transcripts?.read !== 'function' || !host.sessionId) return null
+      try {
+        return host.transcripts.read(host.sessionId)
+      } catch {
+        return null
+      }
+    }
+    return { tools: createTools({ ...pluginState(host), approvalEvidence }) }
+  },
 })

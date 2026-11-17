@@ -7,7 +7,7 @@
   "description": "扫描系统盘与天枢自有数据，逐项说明删什么、为什么删、不删的为什么保留；人批准后两阶段执行——先移入隔离区（可撤销），再按批次永久删除。",
   "runtime": "agent",
   "entry": "index.js",
-  "capabilities": ["tools", "storage"],
+  "capabilities": ["tools", "storage", "transcripts"],
   "contributes": {
     "tools": [
       { "name": "disk_scan", "description": "只读扫描天枢两域占用，返回 run_id 与最大若干项" },

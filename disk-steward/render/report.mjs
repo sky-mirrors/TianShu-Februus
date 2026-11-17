@@ -2,6 +2,7 @@
 // 纪律：字段缺失一律显示 '—'，绝不把 undefined/null 泄漏进给人看的文档。
 import { fmtBytes } from '../core/probe.mjs'
 import { isStageable } from '../core/plan.mjs'
+import { advise } from '../core/advice.mjs'
 
 const dash = (v) => {
   if (v === undefined || v === null || v === '') return '—'
@@ -21,6 +22,7 @@ const domainOf = (i) => (String(i?.ruleId ?? i?.id ?? '').startsWith('sys.') ? '
 
 function itemBlock(i, idx) {
   const e = i.explain ?? {}
+  const advice = advise(i)
   const lines = [
     `### ${idx}. ${dash(i.title)} · ${fmtBytes(i.bytes)}`,
     '',
@@ -28,6 +30,7 @@ function itemBlock(i, idx) {
     `- 域：${domainOf(i)}`,
     `- 路径：\`${dash(i.path)}\``,
     `- 分级：${dash(i.grade)}${i.blocked ? `（被挡：${dash(i.blocked)}）` : ''}`,
+    `- 建议：${advice.label} — ${dash(advice.reason)}`,
     `- 是什么：${dash(e.what)}`,
     `- 为什么：${dash(e.why)}`,
     `- 重建：${dash(e.rebuild)}`,

@@ -60,7 +60,7 @@ npm run plugin -- status rel_disk_steward_<version>
 | `id` | `disk-steward` | 不在保留名单（`xiaosi-axiom` 为内置），与入口 `index.js` 的 `defineTianshuPlugin({ id })` 一致 |
 | `version` | `0.1.0` | 稳定 SemVer，无预发布标记。首发审核若按「第一个可用发行」处理，可改 `1.0.0` 后重打包 |
 | `entry` | `index.js` | 包内相对路径，非空 UTF-8 JS |
-| `capabilities` | `tools`, `storage` | 工具面 + `activate(host)` 用 `host.storage.dataDir()` |
+| `capabilities` | `tools`, `storage`, `transcripts` | 工具面 + `activate(host)` 用 `host.storage.dataDir()`；`host.transcripts.read()` 用于核实「用户真的说过批准那句话」 |
 | `contributes.tools` | 8 个 | 与 `createTools()` 返回的工具名一一对应（`test/w33.test.mjs` 断言） |
 | `contributes.lifecycle` | `[]` | 插件不挂生命周期钩子 |
 | `permissions.fs` | `true` | 扫描/移动/删除文件 |
@@ -72,7 +72,7 @@ npm run plugin -- status rel_disk_steward_<version>
 
 - **它真的会删文件**：8 个工具里 `disk_exec` 有写入权（`fs` 权限的实质来源）。防线是四层，缺一层就不执行：
   1. `disk_plan` 只对非保护、未被挡、可 stage 的项签发一次性令牌（10 分钟过期）；
-  2. `disk_exec` 要求 `approval` 参数里带用户本轮明确同意执行的原话，缺失直接拒绝（`EXEC_NOT_HUMAN_APPROVED`）；
+  2. `disk_exec` / `disk_undo` 的 `approval` 不能只是非空字符串：插件用 `host.transcripts.read(sessionId)` 回到本会话记录，只认 `role === 'user'` 消息里的原文片段，助手自己写的话、否定语境（"不要删除"）都不算；宿主未提供会话记录时直接 `EXEC_APPROVAL_UNVERIFIABLE` 拒绝；
   3. 默认 `mode=stage` 只是移入隔离区（可 `disk_undo` 撤销），`mode=purge` 永久删除另需批次已 staged + 同一令牌；
   4. 执行期对每个目标重新 `realpath` 判禁区、重新取 dev+ino+size+mtime 与扫描时比对，不符即回滚并记 `abort`。
 - **写到哪里**：台账、run 落盘、隔离区都在宿主 `storage.dataDir()` 之下（`<dataDir>/runs`、`<dataDir>/trash`），不写插件安装目录——安装目录是随时可被更新/卸载替换的发行包。

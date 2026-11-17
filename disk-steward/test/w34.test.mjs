@@ -36,8 +36,17 @@ const mkItem = (sb, over = {}) => ({
   ...over,
 })
 
+// 批准证据：宿主会话记录里的用户消息。W39 起 approval 必须是用户真的说过的片段。
+const USER_SAID = [
+  { role: 'user', content: '这是测试，批准' },
+  { role: 'user', content: '撤销刚才那次' },
+]
+
 function tools(sb) {
-  return createTools({ stateDir: sb.state, quarantineRoot: sb.quarantine, ledgerPath: sb.ledgerPath })
+  return createTools({
+    stateDir: sb.state, quarantineRoot: sb.quarantine, ledgerPath: sb.ledgerPath,
+    approvalEvidence: () => USER_SAID,
+  })
 }
 
 const tool = (t, name) => t.find((x) => x.name === name)
