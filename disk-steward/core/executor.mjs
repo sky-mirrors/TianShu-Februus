@@ -37,6 +37,7 @@ export async function stage({ plan, token, items, quarantineRoot, ledgerPath, no
   mkdirSync(batchRoot, { recursive: true })
 
   const rows = []
+  const usedDest = new Set()
   for (const item of list) {
     if (item.grade === 'brown' || !item.executor) throw err(EXEC_ERRORS.TOKEN_INVALID, `保护项 ${item.id}`)
 
@@ -56,7 +57,15 @@ export async function stage({ plan, token, items, quarantineRoot, ledgerPath, no
       throw err(EXEC_ERRORS.IDENTITY_CHANGED, `${item.path} 与扫描时不一致（可能已被替换或改写）`)
     }
 
-    const dest = join(batchRoot, quarantineName(target))
+    // quarantineName 把 :\/ 全压成 _，不同源路径可能撞到同一目标
+    // （source/a_b.txt 与 source_a/b.txt），撞上就覆盖前一个文件，撤销也救不回。
+    // 只在真撞了才加序号：没撞时保持原目的名，既有台账/测试的路径假设不变。
+    const base = quarantineName(target)
+    let leaf = base
+    let n = 1
+    while (usedDest.has(leaf)) leaf = `${String(n++).padStart(3, '0')}-${base}`
+    usedDest.add(leaf)
+    const dest = join(batchRoot, leaf)
     mkdirSync(dirname(dest), { recursive: true })
 
     const flags = new Set(item.flags ?? [])

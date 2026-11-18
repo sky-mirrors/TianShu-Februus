@@ -21,7 +21,11 @@ export function readLedger(path) {
   for (const line of readFileSync(path, 'utf8').split('\n')) {
     if (!line.trim()) continue
     try {
-      out.push(JSON.parse(line))
+      const v = JSON.parse(line)
+      // 语法合法不代表是台账行：null / 42 / "str" / {"action":{}} 都会让下游
+      // 的 r.action 读取炸掉。只接受有字符串 action 的对象。
+      if (v && typeof v === 'object' && !Array.isArray(v) && typeof v.action === 'string') out.push(v)
+      else out.push({ action: 'corrupt', raw: line.slice(0, 200) })
     } catch {
       out.push({ action: 'corrupt', raw: line.slice(0, 200) })
     }

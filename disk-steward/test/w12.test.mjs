@@ -20,12 +20,14 @@ test('提权判定：net session 成功 = 已提权；失败 = 未提权（注�
   assert.match(err.reason, /无法确认|ENOENT/)
 })
 
-test('提权判定：真机返回布尔值，且与 C:\\Windows\\Temp 可写性一致', async () => {
+test('提权判定与目录可写性各自返回自身语义（两者不必然相等）', async () => {
   const e = await isElevated()
   assert.equal(typeof e.elevated, 'boolean')
   const w = await systemDirWritable()
-  // 两者若不一致，说明判定有洞——直接失败而不是放行
-  assert.equal(w.writable, e.elevated, `elevated=${e.elevated} 但 systemDirWritable=${JSON.stringify(w)}`)
+  assert.equal(typeof w.writable, 'boolean')
+  assert.equal(typeof w.code, 'string')
+  // 「进程是否提权」与「C:\Windows\Temp 能否写」是两件事：管理员会话可写、
+  // 普通会话也可能因 ACL 而可写。原断言把二者绑成相等，会在不同机器上假红。
 })
 
 test('提权命令是构造出来的字符串，不会被自动执行', () => {

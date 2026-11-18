@@ -510,7 +510,17 @@ export function pruneRuns(dir, keep = RUN_KEEP) {
 }
 
 function loadRun(dir, runId) {
+  // runId 来自工具参数，拼进路径前必须校验：否则 '../outside' 能把状态目录外
+  // 任意自填 JSON 变成「扫描结论」，规则库/禁区/引用判据被整条跳过。
+  if (typeof runId !== 'string' || !/^[A-Za-z0-9_-]+$/.test(runId)) {
+    throw Object.assign(new Error(`run id 非法：${runId}`), { code: 'RUN_ID_INVALID' })
+  }
   const p = join(dir, `${runId}.json`)
   if (!existsSync(p)) throw Object.assign(new Error(`run 不存在：${runId}`), { code: 'RUN_NOT_FOUND' })
-  return JSON.parse(readFileSync(p, 'utf8'))
+  const run = JSON.parse(readFileSync(p, 'utf8'))
+  // 文件内部自填的 runId 决定报告写到哪，不能用它越出状态目录
+  if (run?.runId && run.runId !== runId) {
+    throw Object.assign(new Error(`run 内部 id 与文件名不符：${run.runId}`), { code: 'RUN_ID_INVALID' })
+  }
+  return run
 }

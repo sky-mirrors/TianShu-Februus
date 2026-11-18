@@ -221,8 +221,8 @@ export async function buildRun({
     if (stats.partial) truncated = true
     const explain = buildExplain(rule, stats)
     const active = rule.mtimeGuard === false ? false : now - stats.latestMtime < mtimeGuardMs
-    let blocked = active ? 'active' : null
-    let blockedReason = active ? '10 分钟内有写入（可能仍在使用）' : null
+    let blocked = stats.partial ? 'SCAN_INCOMPLETE' : active ? 'active' : null
+    let blockedReason = stats.partial ? '测量未扫完，不能据此删除' : active ? '10 分钟内有写入（可能仍在使用）' : null
 
     // precondition：机器可检查的执行前置。不满足就阻塞，不许"先删了再说"
     if (!blocked && rule.precondition) {
