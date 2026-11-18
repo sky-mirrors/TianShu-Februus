@@ -16,12 +16,21 @@
 
 ## 谁必须提供（我无法代填）
 
-1. `publisher_id` —— 开发者中心 `/developers/authorization` 完成发布者核验后由平台分配。上面的 `REPLACE_WITH_PUBLISHER_ID` 是占位符，真提交前替换。
-2. `--source-url` —— 插件的 HTTPS 源码地址（`submit` 必填）。
-3. `--license` —— 软件许可证。仓库里目前没有 LICENSE 文件，发行方需要在提交时给出 SPDX 标识（如 `MIT`）。
-4. `--data-use` —— 数据用途说明（见下「数据与隐私」可直接引用）。
-5. `--release-notes` —— 版本说明。
-6. `--source-commit` —— **打包所用源码的完整 40 位 Git 提交哈希**。当前这份 ZIP 用的是 `b3e3334…`（本次改动之前的 HEAD），提交前请先 commit 再重新打包，让哈希与实际源码一致。
+1. `publisher_id` —— 开发者中心 `/developers/authorization` 完成发布者核验后由平台分配。上面的 `REPLACE_WITH_PUBLISHER_ID` 是占位符，真提交前替换。**这一项必须在浏览器里登录后人工完成**（或由用户把平台签发的 id 告我）。
+2. `XPI_PUBLISHER_TOKEN` —— 发布者后台按插件和分区签发（形如 `XSPCI1_…`），只能由账号持有者取。
+
+## 已具备的提交参数（不需再找人填）
+
+| 参数 | 值 | 出处 |
+|---|---|---|
+| `--source-url` | `https://github.com/sky-mirrors/TianShu-Februus` | 公开仓库已发布（MIT） |
+| `--license` | `MIT` | 仓库根 `LICENSE` 已就位，GitHub 已识别 |
+| `--release-id` | `rel_disk_steward_0.1.0` | 版本号见 `tianshu.plugin.json` |
+| `--platforms` | `win32-x64` | 只验证过本机平台 |
+| `--data-use` | 见文末「数据与隐私」段原文 | — |
+| `--source-commit` | **每次打包前重新取**：`git rev-parse HEAD`（当前 `4bafda82e70d9032834030fbd446397fa5e583af`） | 源码改动后必须重新打包并重取哈希 |
+
+> `--license` 这一项原先缺 LICENSE 文件，现已解决：仓库根有 MIT 许可证。
 
 ## 提交命令
 
@@ -61,7 +70,7 @@ npm run plugin -- status rel_disk_steward_<version>
 | `version` | `0.1.0` | 稳定 SemVer，无预发布标记。首发审核若按「第一个可用发行」处理，可改 `1.0.0` 后重打包 |
 | `entry` | `index.js` | 包内相对路径，非空 UTF-8 JS |
 | `capabilities` | `tools`, `storage`, `transcripts` | 工具面 + `activate(host)` 用 `host.storage.dataDir()`；`host.transcripts.read()` 用于核实「用户真的说过批准那句话」 |
-| `contributes.tools` | 8 个 | 与 `createTools()` 返回的工具名一一对应（`test/w33.test.mjs` 断言） |
+| `contributes.tools` | 9 个 | 与 `createTools()` 返回的工具名一一对应（`test/w33.test.mjs` 断言） |
 | `contributes.lifecycle` | `[]` | 插件不挂生命周期钩子 |
 | `permissions.fs` | `true` | 扫描/移动/删除文件 |
 | `permissions.shell` | `true` | `spawnSync` 调 `tasklist`、`sc.exe`、`net`（前置条件与提权检测） |
