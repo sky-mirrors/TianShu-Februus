@@ -116,7 +116,7 @@ docs/                      # 架构设计、生态调研、边界对照
 | 测试 | **259 用例 / 58 个文件，全绿**（`pass 259 / fail 0`，约 140s） | `npm test` |
 | 工具 | **9** 个 | `createTools().length` |
 | 规则 | 天枢域 **21** 条（stage 12 / compact 2 / protected 7）、系统域 **35** 条 | `rules/tianshu.rules.json`、`domains/system.mjs` |
-| 硬禁区 | **9** 类 | `core/guard.mjs` 的 `DENY` |
+| 硬禁区 | **10** 类 | `core/guard.mjs` 的 `DENY` |
 | 代码量 | **81 个 `.mjs` / 7287 行**（含测试；生产代码 31 个文件） | `find` + `wc -l` |
 
 真机一次系统盘清理的实测记录：扫描出 13 项可执行候选 17.92 GB，实际清理 6 项，**C 盘可用空间 79.3 GB → 95.2 GB**。其中 1 项（缩略图缓存）因 `rename` 报 `EPERM`（被 explorer 占用）被跳过，台账留下 `abort` 记录 —— 插件不会为了「清理干净」去动正在使用的目录。

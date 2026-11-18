@@ -32,7 +32,7 @@
 | 测试 | **259 用例 / 58 个文件**，全绿 | `npm test`（`scripts.test = node --test`），exit 0，约 140s |
 | 类型检查 | `tsc --noEmit` **exit 0** | `../node_modules/.bin/tsc --noEmit` |
 | 规则 | 天枢域 **21** 条、系统域 **35** 条 | `rules/tianshu.rules.json`、`domains/system.mjs` |
-| 硬禁区 | **9** 类（`core/guard.mjs` 的 `DENY`） | 逐条见「安全模型」节 |
+| 硬禁区 | **10** 类（`core/guard.mjs` 的 `DENY`） | 逐条见「安全模型」节 |
 | 代码量 | **81 个 `.mjs` / 7287 行**（含测试；生产代码 31 个） | `find . -name '*.mjs' -not -path './node_modules/*' \| wc -l` |
 | 台账 | `<dataDir>/runs/ledger.jsonl` **32 行**：`intent` 11、`stage` 10、`batch` 3、`undo` 1、`abort` 1、`purge` 6 | 该文件按 `action` 计数 |
 
