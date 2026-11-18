@@ -90,6 +90,39 @@ npm run plugin -- status rel_disk_steward_<version>
 - **生命周期与脚本钩子**：无。因此也满足 `paid_unreviewed` 分区的形态要求（该分区要求贡献工具、禁止 lifecycle 与 hooks）——当前宿主阻止未审核付费包执行，先走 `official_reviewed`。
 - **隐私**：扫描只读体积与路径，不读文件内容；`includeSamples` 默认关闭，结果里的样本文件名一律清空，显式 `true` 才会记录。`disk_report` 生成的是体积清单与逐项解释，不含文件内容。
 
-## 数据与隐私（可直接作为 `--data-use` 文本）
+## 提交页要填的三段文本（可直接粘贴）
 
-> 不收集、不上传任何用户数据。插件在本机运行，无网络访问（`permissions.net=false`）。扫描仅统计路径与占用体积，不读取文件内容；样本文件名默认脱敏。台账、扫描结果与隔离区文件仅写入本机宿主数据目录，供撤销与审计使用，不离开本机。
+### 数据用途
+
+> 不收集、不上传任何用户数据。插件在本机运行，无网络访问（`permissions.net=false`）。扫描仅统计路径与占用体积，不读取文件内容；样本文件名默认脱敏（`includeSamples` 默认关闭）。台账、扫描结果与隔离区文件仅写入本机宿主数据目录（`storage.dataDir()`），供撤销与审计使用，不离开本机。
+
+### 外部服务与费用
+
+> **无外部服务**：零第三方依赖（发行包只含 `node:` 内建模块与相对路径 import），不访问任何网络端点、不调用云 API、无遥测与分析。
+> **费用**：插件免费，无内购、无订阅、无按次计费。运行不产生任何费用。
+> `permissions.shell=true` 仅用于调系统自带命令做前置条件检查与提权判定（`tasklist` / `sc.exe query` / `net`），不下载、不安装、不联网。
+
+### 版本变更说明（0.1.0 首发）
+
+> 首个公开版本。
+>
+> - 9 个工具：`disk_scan` / `disk_status` / `disk_rules` / `disk_report` / `disk_diff` / `disk_plan` / `disk_exec` / `disk_undo` / `disk_recover`
+> - 双域扫描：天枢自身数据（`~/.rivet`、项目 `.rivet`）+ Windows 系统缓存（天枢域 21 条规则、系统域 35 条规则）
+> - 两阶段执行：`stage` 移入隔离区（可撤销）→ `purge` 永久删除；执行前四层校验（一次性令牌 / 人工批准原话比对会话记录 / 批次已 staged / realpath + dev+ino+size+mtime 复核）
+> - 硬禁区 10 类（含 UNC 网络路径），append-only 台账（坏行降级为 `corrupt` 不拖垮整批），崩溃恢复入口
+> - 259 个用例全绿；仅验证 Windows x64
+
+## 实测发现：release-id 不允许点号
+
+`--release-id rel_disk_steward_0.1.0` 会被 zod 拒（`must match /^[A-Za-z0-9][A-Za-z0-9_-]{7,79}$/`）。
+改用下划线：**`rel_disk_steward_0_1_0`**。
+
+## 已生成的发行包（源码 `4bafda82e70d9032834030fbd446397fa5e583af`）
+
+```
+.tmp-devkit/disk-steward-0.1.0-pending.zip   158 962 字节
+artifact_sha256 = 30dc705292c766658667c51858e036adcd410479dfeefcbc457781ebffc2a3a9
+validate --lane official_reviewed → valid: true, errors: 0
+```
+
+> 这个包是用 `--publisher-id pending` 打的（真 id 到手后需重打一次，包内清单会记录发布者）。
