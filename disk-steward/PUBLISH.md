@@ -28,7 +28,7 @@
 | `--release-id` | `rel_disk_steward_0.1.0` | 版本号见 `tianshu.plugin.json` |
 | `--platforms` | `win32-x64` | 只验证过本机平台 |
 | `--data-use` | 见文末「数据与隐私」段原文 | — |
-| `--source-commit` | 每次打包前取「实际被打包源码」的提交：`git rev-parse <commit>`。当前对应 `b446fe5aa5aea9ab7c4feb0c33a79b332bfd641e` | 该提交之后只有 3 个 `.md` 改动，代码未变 |
+| `--source-commit` | 每次打包前取「实际被打包源码」的提交：`git rev-parse <commit>`。当前对应 `3c57e25e7619e9a65f8ac249f08d0c39fac0b044` | 源码改动后必须重打包并重取哈希 |
 
 > `--license` 这一项原先缺 LICENSE 文件，现已解决：仓库根有 MIT 许可证。
 
@@ -117,15 +117,15 @@ npm run plugin -- status rel_disk_steward_<version>
 `--release-id rel_disk_steward_0.1.0` 会被 zod 拒（`must match /^[A-Za-z0-9][A-Za-z0-9_-]{7,79}$/`）。
 改用下划线：**`rel_disk_steward_0_1_0`**。
 
-## 已生成的发行包（源码 `b446fe5aa5aea9ab7c4feb0c33a79b332bfd641e`）
+## 已生成的发行包（源码 `3c57e25e7619e9a65f8ac249f08d0c39fac0b044`）
 
 ```
-.tmp-devkit/disk-steward-0.1.0.zip   158 991 字节
+.tmp-devkit/disk-steward-0.1.0.zip   163 858 字节
 release_id      = rel_disk_steward_0_1_0
 publisher_id    = b226234e-c3c8-4223-9e58-7e9fadbb5bea   （写在包内 xiaosi.release.json）
-artifact_sha256 = a6900b0b388c9794d62e4dbb6d8e71badff2f48162ce9e7ff93c5c77d9c3b938
+artifact_sha256 = e9c7321a2c828137cff615e131d90fb3318c9810f689dc510daafdbcec4e645a
 validate --lane official_reviewed → valid: true, errors: 0
 ```
 
+> 该包已含 `dist/LICENSE`（与仓库根逐字节一致）。
 > `publisher_id` **确实写进包内** `xiaosi.release.json`（曾误判为「不写进包」，解开 ZIP 实测纠正）。换发布者必须重打包。
-> `source_commit` 用 `b446fe5` 而非更晚的 `4bafda8`：`git diff --name-only b446fe5 HEAD` 只列出 3 个 `.md`，打包的 `dist/` 来自该提交的源码。
