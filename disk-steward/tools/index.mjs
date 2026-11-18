@@ -61,6 +61,11 @@ export function createTools(deps = {}) {
         const min = Number(call?.args?.minBytes ?? 1048576)
         // 整盘扫描是唯一有用户可给时限的入口：这个预算必须约束**整个调用**
         // （system 域 35 条规则实测 51.5s，原先一点预算都不受，导致 20s 预算跑出 84.4s）
+        // NaN deadline 会让所有 `Date.now() > deadline` 恒为 false，预算彻底失效；
+        // 且宿主不按 inputSchema 校验参数，必须在执行层自己挡。
+        if (call?.args?.sweepBudgetMs !== undefined && !Number.isFinite(Number(call.args.sweepBudgetMs))) {
+          return { content: `SCAN_BUDGET_INVALID: sweepBudgetMs 必须是有限数值，实际 ${String(call.args.sweepBudgetMs)}`, isError: true }
+        }
         const budgetMs = Number(call?.args?.sweepBudgetMs ?? 120000)
         const deadline = Date.now() + budgetMs
         // 清哪一侧由用户决定：不提供默认值。缺省直接拒绝，逼调用方先去问。
@@ -352,6 +357,12 @@ export function createTools(deps = {}) {
           return { content: `${check.code}: ${check.reason}——先把计划逐项给用户看并取得同意；approval 必须逐字取自本会话里用户自己发的消息`, isError: true }
         }
         const approved = { ...plan, issuer: 'human', confirmedBy: `chat:${check.quote}` }
+        // inputSchema 的 enum 只是给模型看的声明，宿主不按它校验参数；
+        // 不在执行层设白名单，任何拼错或"预览"式的值都会直接落到 purge 分支。
+        const mode = call?.args?.mode
+        if (mode !== 'stage' && mode !== 'purge') {
+          return { content: `EXEC_INVALID_MODE: mode 只能是 stage 或 purge，实际 ${String(mode)}`, isError: true }
+        }
         try {
           if (call.args.mode === 'stage') {
             const r = await stage({ plan: approved, token: call.args.token, items: plan.items, quarantineRoot: quarantine, ledgerPath: ledger })

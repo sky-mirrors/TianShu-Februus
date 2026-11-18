@@ -190,6 +190,7 @@ export async function purge({ plan, batchId, token, quarantineRoot, ledgerPath, 
   if (plan.issuer !== 'human' || !plan.confirmedBy) {
     throw err(EXEC_ERRORS.NOT_HUMAN_APPROVED, `issuer=${plan.issuer ?? '未知'}，永久删除必须人工确认`)
   }
+  if (now > plan.expiresAt) throw err(EXEC_ERRORS.PLAN_EXPIRED)
   if (!plan.stagedBatches?.has(batchId)) throw err(EXEC_ERRORS.BATCH_NOT_STAGED, batchId)
 
   const rows = readLedger(ledgerPath).filter((r) => r.batchId === batchId && (r.action === 'done' || r.action === 'stage'))
