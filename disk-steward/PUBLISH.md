@@ -28,7 +28,7 @@
 | `--release-id` | `rel_disk_steward_0.1.0` | 版本号见 `tianshu.plugin.json` |
 | `--platforms` | `win32-x64` | 只验证过本机平台 |
 | `--data-use` | 见文末「数据与隐私」段原文 | — |
-| `--source-commit` | 每次打包前取「实际被打包源码」的提交：`git rev-parse <commit>`。当前对应 `3c57e25e7619e9a65f8ac249f08d0c39fac0b044` | 源码改动后必须重打包并重取哈希 |
+| `--source-commit` | 每次打包前取「实际被打包源码」的提交：`git rev-parse <commit>`。当前对应 `59e3af777cc6db257d5ef75e00f572ef17250289` | 源码改动后必须重打包并重取哈希 |
 
 > `--license` 这一项原先缺 LICENSE 文件，现已解决：仓库根有 MIT 许可证。
 
@@ -110,23 +110,23 @@ npm run plugin -- status rel_disk_steward_<version>
 > - 双域扫描：天枢自身数据（`~/.rivet`、项目 `.rivet`）+ Windows 系统缓存（天枢域 21 条规则、系统域 35 条规则）
 > - 两阶段执行：`stage` 移入隔离区（可撤销）→ `purge` 永久删除；执行前四层校验（一次性令牌 / 人工批准原话比对会话记录 / 批次已 staged / realpath + dev+ino+size+mtime 复核）
 > - 硬禁区 10 类（含 UNC 网络路径），append-only 台账（坏行降级为 `corrupt` 不拖垮整批），崩溃恢复入口
-> - 外部审核后的加固：拒绝越界 runId 与非法 `mode`/预算参数、`purge` 校验计划时效与真实隔离区边界、隔离区目标名防碰撞、部分扫描不给执行资格、计划去重、发行包纳入 MIT 许可证
-> - 269 个用例全绿；仅验证 Windows x64
+> - 外部审核后的加固：拒绝越界 runId 与非法 `mode`/预算参数、`purge` 校验计划时效与真实隔离区边界、隔离区目标名防碰撞、部分扫描不给执行资格、计划去重、进程查询失败 fail-closed、发行包纳入 MIT 许可证
+> - 272 个用例全绿；仅验证 Windows x64
 
 ## 实测发现：release-id 不允许点号
 
 `--release-id rel_disk_steward_0.1.0` 会被 zod 拒（`must match /^[A-Za-z0-9][A-Za-z0-9_-]{7,79}$/`）。
 改用下划线：**`rel_disk_steward_0_1_0`**。
 
-## 已生成的发行包（源码 `3c57e25e7619e9a65f8ac249f08d0c39fac0b044`）
+## 发行包（固定字段）
 
 ```
-.tmp-devkit/disk-steward-0.1.0.zip   163 858 字节
-release_id      = rel_disk_steward_0_1_0
-publisher_id    = b226234e-c3c8-4223-9e58-7e9fadbb5bea   （写在包内 xiaosi.release.json）
-artifact_sha256 = e9c7321a2c828137cff615e131d90fb3318c9810f689dc510daafdbcec4e645a
-validate --lane official_reviewed → valid: true, errors: 0
+release_id   = rel_disk_steward_0_1_0
+publisher_id = b226234e-c3c8-4223-9e58-7e9fadbb5bea   （写在包内 xiaosi.release.json）
+platforms    = win32-x64
 ```
 
-> 该包已含 `dist/LICENSE`（与仓库根逐字节一致）。
+**产物体积与 `artifact_sha256` 一律以打包后 `validate --lane official_reviewed` 的输出为准**，不在本文档硬编码：写死会形成「改文档 → 新提交 → 又要重打 → 哈希又变」的自指循环。上传前把 validate 输出的 sha256 与页面回执对账即可确认是同一份字节。
+
+> 包内已含 `dist/LICENSE`（与仓库根逐字节一致）。
 > `publisher_id` **确实写进包内** `xiaosi.release.json`（曾误判为「不写进包」，解开 ZIP 实测纠正）。换发布者必须重打包。
