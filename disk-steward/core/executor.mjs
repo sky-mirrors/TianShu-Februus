@@ -202,7 +202,7 @@ export async function purge({ plan, batchId, token, quarantineRoot, ledgerPath, 
   if (now > plan.expiresAt) throw err(EXEC_ERRORS.PLAN_EXPIRED)
   if (!plan.stagedBatches?.has(batchId)) throw err(EXEC_ERRORS.BATCH_NOT_STAGED, batchId)
 
-  const rows = readLedger(ledgerPath).filter((r) => r.batchId === batchId && (r.action === 'done' || r.action === 'stage'))
+  const rows = readLedger(ledgerPath).filter((r) => r.batchId === batchId && (r.action === 'stage'))
   let purged = 0
   for (const r of rows) {
     assertRealTarget(quarantineRoot, r.to)
@@ -218,17 +218,19 @@ export async function undo({ batchId, ledgerPath, now = Date.now() }) {
   const rows = readLedger(ledgerPath).filter(
     (r) =>
       r.batchId === batchId &&
-      ['stage', 'done', 'file-stage', 'file-intent', 'intent'].includes(r.action) &&
+      ['stage', 'file-stage', 'file-intent', 'intent'].includes(r.action) &&
       r.undoSupported,
   )
   // intent 是兜底凭据：正常批次里它已被同 item 的 stage/done 行取代，只有
   // 「移动完成、stage 行没落」的崩溃批次才靠它。不排除的话同一条目会被处理两次
   // （先按 stage 恢复成功，再按 intent 命中"目标已存在"记一条噪声 skip）。
+  // 覆盖按「目的路径」判，不按 itemId：同一条目下 A 已写终态、
+  // B 只有 file-intent 时，旧逻辑会把 B 也当成已覆盖而静默漏掉。
   const covered = new Set(
-    rows.filter((r) => r.action !== 'intent' && r.action !== 'file-intent').map((r) => r.itemId),
+    rows.filter((r) => r.action === 'stage' || r.action === 'file-stage').map((r) => r.to),
   )
   const recoverable = rows.filter(
-    (r) => (r.action !== 'intent' && r.action !== 'file-intent') || !covered.has(r.itemId),
+    (r) => (r.action !== 'intent' && r.action !== 'file-intent') || !covered.has(r.to),
   )
   let restored = 0
   const skipped = []
@@ -258,7 +260,7 @@ export async function undo({ batchId, ledgerPath, now = Date.now() }) {
  */
 export async function recoverBatch({ ledgerPath, batchId, now = Date.now() }) {
   const rows = readLedger(ledgerPath).filter((r) => r.batchId === batchId)
-  const terminal = new Set(rows.filter((r) => r.action === 'stage' || r.action === 'done' || r.action === 'abort').map((r) => r.itemId))
+  const terminal = new Set(rows.filter((r) => r.action === 'stage' || r.action === 'abort').map((r) => r.itemId))
   const intents = rows.filter((r) => r.action === 'intent' && !terminal.has(r.itemId))
   const terminalFiles = new Set(rows.filter((r) => r.action === 'file-stage' || r.action === 'file-abort').map((r) => r.to))
 
@@ -322,7 +324,7 @@ export async function pendingBatches({ ledgerPath }) {
       b.bytes += r.bytes ?? 0
     } else if (r.action === 'file-intent') {
       b.files.add(r.to)
-    } else if (r.action === 'stage' || r.action === 'done' || r.action === 'abort') {
+    } else if (r.action === 'stage' || r.action === 'abort') {
       b.doneItems.add(r.itemId)
     } else if (r.action === 'file-stage' || r.action === 'file-abort') {
       b.doneFiles.add(r.to)
@@ -376,7 +378,7 @@ export async function purgeBatch({ batchId, ledgerPath, quarantineRoot, approval
     throw err(EXEC_ERRORS.NOT_HUMAN_APPROVED, `issuer=${approval?.issuer ?? '未知'}，永久删除必须人工确认`)
   }
   const rows = readLedger(ledgerPath).filter((r) => r.batchId === batchId)
-  const staged = rows.filter((r) => r.action === 'stage' || r.action === 'done')
+  const staged = rows.filter((r) => r.action === 'stage')
   if (!staged.length) throw err(EXEC_ERRORS.BATCH_NOT_FOUND, batchId)
   for (const r of staged) {
     assertRealTarget(quarantineRoot, r.to)
@@ -403,7 +405,7 @@ export async function quarantineStats({ ledgerPath, quarantineRoot, now = Date.n
   const purgedItems = new Set(rows.filter((r) => r.action === 'purge').map((r) => `${r.batchId}:${r.itemId}`))
   // 只算“文件仍真实存在”的条目：被 undo 回去或已 purge 的不该继续占额度
   const live = rows.filter(
-    (r) => (r.action === 'stage' || r.action === 'done') && !purgedItems.has(`${r.batchId}:${r.itemId}`) && existsSync(r.to),
+    (r) => (r.action === 'stage') && !purgedItems.has(`${r.batchId}:${r.itemId}`) && existsSync(r.to),
   )
   const batches = new Set(live.map((r) => r.batchId))
   const bytes = live.reduce((n, r) => n + (r.bytes ?? 0), 0)
@@ -426,7 +428,7 @@ export async function quarantinePolicy({ ledgerPath, quarantineRoot, now = Date.
   const rows = readLedger(ledgerPath)
   const purged = new Set(rows.filter((r) => r.action === 'purge').map((r) => `${r.batchId}:${r.itemId}`))
   const live = rows.filter(
-    (r) => (r.action === 'stage' || r.action === 'done') && !purged.has(`${r.batchId}:${r.itemId}`) && existsSync(r.to),
+    (r) => (r.action === 'stage') && !purged.has(`${r.batchId}:${r.itemId}`) && existsSync(r.to),
   )
   const byBatch = new Map()
   for (const r of live) {

@@ -6,7 +6,7 @@ export const defaultPs = {
   async list() {
     if (process.platform !== 'win32') return []
     const r = spawnSync('tasklist', ['/FO', 'CSV', '/NH'], { encoding: 'utf8', timeout: 5000, windowsHide: true })
-    if (r.status !== 0 || !r.stdout) return []
+    if (r.status !== 0 || !r.stdout) throw Object.assign(new Error('tasklist 查询失败或超时'), { code: 'PS_QUERY_FAILED' })
     return r.stdout
       .split(/\r?\n/)
       .map((l) => (l.split('","')[0] ?? '').replace(/^"/, '').trim())
@@ -20,7 +20,15 @@ export async function checkPrecondition(spec, { ps = defaultPs, fs = { exists: e
   if (!spec || !spec.kind) return { ok: false, code: 'PRECONDITION_UNKNOWN', reason: '缺 kind' }
 
   if (spec.kind === 'processNotRunning') {
-    const list = (await ps.list()).map(norm)
+    let list
+    try {
+      const raw = await ps.list()
+      if (!Array.isArray(raw)) return { ok: false, code: 'PRECONDITION_UNKNOWN', reason: '进程列表不可用' }
+      list = raw.map(norm)
+    } catch {
+      // 「查不到」和「确实没在运行」是两回事：未知一律不放行
+      return { ok: false, code: 'PRECONDITION_UNKNOWN', reason: '进程列表查询失败，无法判定' }
+    }
     if (list.includes(norm(spec.name))) {
       return { ok: false, code: 'PRECONDITION_FAILED', reason: `进程 ${spec.name} 正在运行，先关掉再清` }
     }
