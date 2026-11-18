@@ -94,7 +94,11 @@ npm run plugin -- status rel_disk_steward_<version>
 
 ### 数据用途
 
-> 不收集、不上传任何用户数据。插件在本机运行，无网络访问（`permissions.net=false`）。扫描仅统计路径与占用体积，不读取文件内容；样本文件名默认脱敏（`includeSamples` 默认关闭）。台账、扫描结果与隔离区文件仅写入本机宿主数据目录（`storage.dataDir()`），供撤销与审计使用，不离开本机。
+> 本插件在本机运行，无网络访问（`permissions.net=false`），不收集、不上传、不向任何外部服务发送用户数据。
+>
+> 读取范围分两类：① **体积清单**用 `readdir` / `stat` 统计路径、字节数、文件数、扩展名与 mtime，不打开文件内容；② **引用分析**（只针对天枢产物目录）会在本机读取候选文本与二进制文件的正文，并以只读方式打开宿主 SQLite 数据库（`node:sqlite`，`readOnly: true`），枚举表并 `SELECT * LIMIT <rowCap>`，把内容拼成内存语料，用来判断该产物是否仍被会话或知识引用。依据 `core/refindex.mjs:66/73/76/185/189`。这些正文只在本机内存做字符串匹配，**不写入台账、不写进扫描报告、不离开本机**；样本文件名默认脱敏（`includeSamples` 默认 false）。
+>
+> 写入范围：扫描 run、Markdown 报告、append-only 台账与隔离区文件，全部落在宿主 `storage.dataDir()` 之下（`<dataDir>/runs`、`<dataDir>/trash`），供撤销与审计。用户可用 `disk_undo` 恢复、`disk_exec mode=purge` 永久删除，或自行清理该目录。工具返回给宿主的是路径、体积、分级与逐项解释，会进入会话记录。
 
 ### 外部服务与费用
 
