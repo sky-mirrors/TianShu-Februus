@@ -1,6 +1,6 @@
 // 执行器：两阶段（stage → purge）+ 撤销。唯一有写权限的层。
 // 硬门：purge 必须令牌正确且批次已 staged；stage 只做同卷 rename（跨卷退化为复制+删并标注）。
-import { mkdirSync, renameSync, cpSync, rmSync, existsSync, readdirSync, utimesSync } from 'node:fs'
+import { mkdirSync, renameSync, cpSync, rmSync, existsSync, readdirSync, utimesSync, lstatSync } from 'node:fs'
 import { join, dirname, resolve, sep } from 'node:path'
 import { appendLedger, readLedger, newId } from './ledger.mjs'
 import { snapshot, sameIdentity, verifyMoved } from './identity.mjs'
@@ -205,6 +205,7 @@ export async function purge({ plan, batchId, token, quarantineRoot, ledgerPath, 
   const rows = readLedger(ledgerPath).filter((r) => r.batchId === batchId && (r.action === 'done' || r.action === 'stage'))
   let purged = 0
   for (const r of rows) {
+    assertRealTarget(quarantineRoot, r.to)
     if (!existsSync(r.to)) continue
     rmSync(r.to, { recursive: true, force: true })
     appendLedger(ledgerPath, { ts: now, batchId, action: 'purge', itemId: r.itemId, from: r.from, to: r.to, bytes: r.bytes })
@@ -345,6 +346,33 @@ const underRoot = (child, root) => {
 }
 
 /**
+ * 删之前核对真实边界：字符串前缀挡不住目录被 junction / symlink 换掉。
+ * 逐段向上 lstat，任何一级是链接或解析后跑出隔离区，一律拒绝删除。
+ */
+function assertRealTarget(root, target) {
+  const r = resolve(root).toLowerCase()
+  const t = resolve(target).toLowerCase()
+  if (t === r || !t.startsWith(r.endsWith(sep) ? r : r + sep)) {
+    throw err(EXEC_ERRORS.BATCH_PATH_ESCAPE, `${target} 不在隔离区内`)
+  }
+  let cur = resolve(target)
+  let stop = resolve(root)
+  while (cur !== stop) {
+    try {
+      if (lstatSync(cur).isSymbolicLink()) {
+        throw err(EXEC_ERRORS.BATCH_PATH_ESCAPE, `${cur} 是重解析点，拒绝删除`)
+      }
+    } catch (e) {
+      if (e.code === 'ENOENT') break // 目录被移走：让 existsSync 去判
+      throw e
+    }
+    const parent = dirname(cur)
+    if (parent === cur) break
+    cur = parent
+  }
+}
+
+/**
  * 重启后仍可释放空间：只凭台账 + 人工批准，不依赖内存里的 plan。
  * 安全前提：台账里每条目标路径都必须落在 quarantineRoot 之下（防台账被篡改后越界删）。
  * @param {{ batchId: string, ledgerPath: string, quarantineRoot: string, approval?: {issuer?: string, confirmedBy?: string|null}, now?: number }} args
@@ -357,7 +385,7 @@ export async function purgeBatch({ batchId, ledgerPath, quarantineRoot, approval
   const staged = rows.filter((r) => r.action === 'stage' || r.action === 'done')
   if (!staged.length) throw err(EXEC_ERRORS.BATCH_NOT_FOUND, batchId)
   for (const r of staged) {
-    if (!underRoot(r.to, quarantineRoot)) throw err(EXEC_ERRORS.BATCH_PATH_ESCAPE, `${r.to} 不在隔离区内`)
+    assertRealTarget(quarantineRoot, r.to)
   }
 
   const alreadyPurged = new Set(rows.filter((r) => r.action === 'purge').map((r) => r.itemId))

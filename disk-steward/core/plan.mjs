@@ -8,6 +8,7 @@ export const PLAN_ERRORS = {
   REFUSED_BLOCKED: 'PLAN_REFUSED_BLOCKED',
   REFUSED_NOT_STAGEABLE: 'PLAN_REFUSED_NOT_STAGEABLE',
   REFUSED_STALE_REFS: 'PLAN_REFUSED_STALE_REFS',
+  REFUSED_DUPLICATE: 'PLAN_REFUSED_DUPLICATE',
 }
 
 const STAGEABLE = new Set(['stage', 'migrate'])
@@ -32,6 +33,7 @@ function err(code, detail) {
  */
 export function createPlan({ run, itemIds, now = Date.now(), ttlMs = 10 * 60 * 1000, issuer = 'agent', confirmedBy = null, allowStaleRefs = false }) {
   if (!Array.isArray(itemIds) || itemIds.length === 0) throw err(PLAN_ERRORS.EMPTY)
+  if (new Set(itemIds).size !== itemIds.length) throw err(PLAN_ERRORS.REFUSED_DUPLICATE, `${itemIds.length} 个 id 中有重复项`)
   const byId = new Map((run?.items ?? []).map((i) => [i.id, i]))
   const items = []
   for (const id of itemIds) {

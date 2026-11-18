@@ -37,12 +37,16 @@ while (queue.length) {
   }
 }
 
+// 发行包的许可证来自仓库根（与 disk-steward/ 同级），不在 import 图里，
+// 也不以规则数据的形式被 readFileSync 读到 —— 必须显式复制。
+const ROOT_LICENSE = join(ROOT, '..', 'LICENSE')
 rmSync(DIST, { recursive: true, force: true })
 for (const rel of [...closure, ...DATA_FILES, 'tianshu.plugin.json']) {
   const dest = join(DIST, rel)
   mkdirSync(dirname(dest), { recursive: true })
   cpSync(join(ROOT, rel), dest)
 }
+cpSync(ROOT_LICENSE, join(DIST, 'LICENSE'))
 
 // 发行包的 package.json 只留标识：含 scripts / dependencies 会被官方校验器拒绝
 writeFileSync(
@@ -60,6 +64,6 @@ writeFileSync(
   ) + '\n',
 )
 
-const files = [...closure, ...DATA_FILES, 'tianshu.plugin.json', 'package.json'].sort()
+const files = [...closure, ...DATA_FILES, 'tianshu.plugin.json', 'package.json', 'LICENSE'].sort()
 console.log(`dist/ 就绪：${files.length} 个文件（入口闭包 ${closure.size} + 数据 ${DATA_FILES.length} + 清单/包声明）`)
 console.log(files.map((f) => `  ${f}`).join('\n'))
