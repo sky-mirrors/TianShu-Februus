@@ -3,7 +3,7 @@
   "kind": "tianshu.plugin",
   "id": "disk-steward",
   "displayName": "磁盘管家",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "扫描系统盘与天枢自有数据，逐项说明删什么、为什么删、不删的为什么保留；人批准后两阶段执行——先移入隔离区（可撤销），再按批次永久删除。",
   "runtime": "agent",
   "entry": "index.js",

@@ -25,10 +25,10 @@
 |---|---|---|
 | `--source-url` | `https://github.com/sky-mirrors/TianShu-Februus` | 公开仓库已发布（MIT） |
 | `--license` | `MIT` | 仓库根 `LICENSE` 已就位，GitHub 已识别 |
-| `--release-id` | `rel_disk_steward_0.1.0` | 版本号见 `tianshu.plugin.json` |
+| `--release-id` | `rel_disk_steward_0_1_1` | 平台按「插件 ID + 版本 + 发行编号」判重，改版本必须同时改它 |
 | `--platforms` | `win32-x64` | 只验证过本机平台 |
 | `--data-use` | 见文末「数据与隐私」段原文 | — |
-| `--source-commit` | 每次打包前取「实际被打包源码」的提交：`git rev-parse <commit>`。当前对应 `59e3af777cc6db257d5ef75e00f572ef17250289` | 源码改动后必须重打包并重取哈希 |
+| `--source-commit` | 取「最后一次修改包内文件」的提交：`git rev-parse HEAD`（打包前现取） | 源码改动后必须重打包并重取哈希 |
 
 > `--license` 这一项原先缺 LICENSE 文件，现已解决：仓库根有 MIT 许可证。
 
@@ -67,7 +67,7 @@ npm run plugin -- status rel_disk_steward_<version>
 |---|---|---|
 | `$tpi` / `kind` / `runtime` | `1.0` / `tianshu.plugin` / `agent` | 插件库首期只收 TPI 1.0 纯 JavaScript agent 包 |
 | `id` | `disk-steward` | 不在保留名单（`xiaosi-axiom` 为内置），与入口 `index.js` 的 `defineTianshuPlugin({ id })` 一致 |
-| `version` | `0.1.0` | 稳定 SemVer，无预发布标记。首发审核若按「第一个可用发行」处理，可改 `1.0.0` 后重打包 |
+| `version` | `0.1.1` | 稳定 SemVer。首发 `0.1.0` 的发行编号已被平台判重，按修复递增修订号 |
 | `entry` | `index.js` | 包内相对路径，非空 UTF-8 JS |
 | `capabilities` | `tools`, `storage`, `transcripts` | 工具面 + `activate(host)` 用 `host.storage.dataDir()`；`host.transcripts.read()` 用于核实「用户真的说过批准那句话」 |
 | `contributes.tools` | 9 个 | 与 `createTools()` 返回的工具名一一对应（`test/w33.test.mjs` 断言） |
@@ -106,10 +106,11 @@ npm run plugin -- status rel_disk_steward_<version>
 > **费用**：插件免费，无内购、无订阅、无按次计费。运行不产生任何费用。
 > `permissions.shell=true` 仅用于调系统自带命令做前置条件检查与提权判定（`tasklist` / `sc.exe query` / `net`），不下载、不安装、不联网。
 
-### 版本变更说明（0.1.0 首发）
+### 版本变更说明（0.1.1）
 
-> 首个公开版本。
+> 首发修订版本。平台提示「该版本或发行编号已提交」，故从 `0.1.0` 递增修订号，发行编号改为 `rel_disk_steward_0_1_1`；运行代码与 `0.1.0` 完全相同。
 >
+> 该版本包含的功能与加固：
 > - 9 个工具：`disk_scan` / `disk_status` / `disk_rules` / `disk_report` / `disk_diff` / `disk_plan` / `disk_exec` / `disk_undo` / `disk_recover`
 > - 双域扫描：天枢自身数据（`~/.rivet`、项目 `.rivet`）+ Windows 系统缓存（天枢域 21 条规则、系统域 35 条规则）
 > - 两阶段执行：`stage` 移入隔离区（可撤销）→ `purge` 永久删除；执行前四层校验（一次性令牌 / 人工批准原话比对会话记录 / 批次已 staged / realpath + dev+ino+size+mtime 复核）
@@ -120,12 +121,12 @@ npm run plugin -- status rel_disk_steward_<version>
 ## 实测发现：release-id 不允许点号
 
 `--release-id rel_disk_steward_0.1.0` 会被 zod 拒（`must match /^[A-Za-z0-9][A-Za-z0-9_-]{7,79}$/`）。
-改用下划线：**`rel_disk_steward_0_1_0`**。
+改用下划线；0.1.0 用 **`rel_disk_steward_0_1_0`**，0.1.1 用 **`rel_disk_steward_0_1_1`**。
 
 ## 发行包（固定字段）
 
 ```
-release_id   = rel_disk_steward_0_1_0
+release_id   = rel_disk_steward_0_1_1
 publisher_id = b226234e-c3c8-4223-9e58-7e9fadbb5bea   （写在包内 xiaosi.release.json）
 platforms    = win32-x64
 ```
