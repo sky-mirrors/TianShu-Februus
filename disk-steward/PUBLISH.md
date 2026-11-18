@@ -110,7 +110,8 @@ npm run plugin -- status rel_disk_steward_<version>
 > - 双域扫描：天枢自身数据（`~/.rivet`、项目 `.rivet`）+ Windows 系统缓存（天枢域 21 条规则、系统域 35 条规则）
 > - 两阶段执行：`stage` 移入隔离区（可撤销）→ `purge` 永久删除；执行前四层校验（一次性令牌 / 人工批准原话比对会话记录 / 批次已 staged / realpath + dev+ino+size+mtime 复核）
 > - 硬禁区 10 类（含 UNC 网络路径），append-only 台账（坏行降级为 `corrupt` 不拖垮整批），崩溃恢复入口
-> - 259 个用例全绿；仅验证 Windows x64
+> - 外部审核后的加固：拒绝越界 runId 与非法 `mode`/预算参数、`purge` 校验计划时效与真实隔离区边界、隔离区目标名防碰撞、部分扫描不给执行资格、计划去重、发行包纳入 MIT 许可证
+> - 269 个用例全绿；仅验证 Windows x64
 
 ## 实测发现：release-id 不允许点号
 

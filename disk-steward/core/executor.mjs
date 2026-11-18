@@ -339,12 +339,6 @@ export async function pendingBatches({ ledgerPath }) {
   return out.sort((a, b) => b.lastTs - a.lastTs)
 }
 
-const underRoot = (child, root) => {
-  const c = resolve(child).toLowerCase()
-  const r = resolve(root).toLowerCase()
-  return c === r || c.startsWith(r.endsWith(sep) ? r : r + sep)
-}
-
 /**
  * 删之前核对真实边界：字符串前缀挡不住目录被 junction / symlink 换掉。
  * 逐段向上 lstat，任何一级是链接或解析后跑出隔离区，一律拒绝删除。
