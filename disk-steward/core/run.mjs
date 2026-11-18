@@ -97,7 +97,7 @@ function covered(childPath, rulePaths) {
 
 // 只扫「我们拥有所有权」的根（vars.unmatchedRoots），不扫系统临时区——那里不是我们的目录，
 // 否则会把 Temp 下成千上万个无关项算进「受保护」，把面板噪声化。
-async function findUnmatched(vars, rules) {
+async function findUnmatched(vars, rules, deadline = Infinity) {
   const declared = (vars.unmatchedRoots ?? [vars.root, vars.rivetHome, vars.projectRivetHome].filter(Boolean)).filter(Boolean)
   // 同一个目录出现在多个根里（进程 cwd 等于家目录时 rivetHome 与 projectRivetHome 就是同一个），
   // 会让每个未收录路径被列 N 遍——按规范化路径去重，不靠调用方保证两个根不同。
@@ -118,7 +118,7 @@ async function findUnmatched(vars, rules) {
       const p = join(root, e.name)
       if (covered(p, rulePaths)) continue
       // 带体积：否则「这 N 个路径没规则覆盖」无法判断值不值得补规则。只读 measure，不改执行路径。
-      const stats = await measure(p)
+      const stats = await measure(p, { deadline })
       out.push({ path: p, bytes: stats.bytes, grade: 'brown', executor: null, ruleId: null, reason: '未收录规则 → 按保护处理' })
     }
   }
@@ -142,7 +142,7 @@ export function computeTotals(items, unmatched = []) {
   }
 }
 
-/** @param {{rules: any[], vars?: Record<string, any>, now?: number, mtimeGuardMs?: number, collectUnmatched?: boolean, preconditionDeps?: any, refIndexDeps?: any}} opts */
+/** @param {{rules: any[], vars?: Record<string, any>, now?: number, mtimeGuardMs?: number, collectUnmatched?: boolean, preconditionDeps?: any, refIndexDeps?: any, deadline?: number}} opts */
 export async function buildRun({
   rules,
   vars = {},
@@ -151,8 +151,11 @@ export async function buildRun({
   collectUnmatched = true,
   preconditionDeps = undefined,
   refIndexDeps = undefined,
+  deadline = Infinity,
 }) {
   const items = []
+  // 预算耗尽是事实，要报给调用方：否则“扫了一半”和“扫完了”看起来一模一样
+  let truncated = false
   // 隐私默认值：不把真实文件名写进结果；需要时显式 vars.includeSamples = true
   const includeSamples = vars.includeSamples === true
   for (const rule of rules) {
@@ -214,7 +217,8 @@ export async function buildRun({
       continue
     }
 
-    const stats = await measure(path)
+    const stats = await measure(path, { deadline })
+    if (stats.partial) truncated = true
     const explain = buildExplain(rule, stats)
     const active = rule.mtimeGuard === false ? false : now - stats.latestMtime < mtimeGuardMs
     let blocked = active ? 'active' : null
@@ -234,6 +238,7 @@ export async function buildRun({
       kind: stats.kind,
       bytes: stats.bytes,
       fileCount: stats.fileCount,
+      partial: stats.partial === true,
       topExt: stats.topExt,
       samples: includeSamples ? stats.samples : [],
       samplesRedacted: !includeSamples,
@@ -277,6 +282,7 @@ export async function buildRun({
     duplicates,
     unmatched,
     totals,
+    truncated,
     selectable: totals.selectable,
   }
 }

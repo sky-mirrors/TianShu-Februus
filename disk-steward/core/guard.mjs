@@ -23,6 +23,7 @@ export const DENY = {
   VSS: '还原点/卷影副本',
   CRYPTO: '凭据/DPAPI 密钥',
   WINSXS: '组件存储 WinSxS',
+  UNC: '网络共享路径（不在白名单规则库里，一律不碰）',
 }
 
 const RULES = [
@@ -38,6 +39,9 @@ const RULES = [
 ]
 
 export function denyCode(path) {
+  // UNC 必须在 collapse **之前**判：collapse 会吃掉空段，把 `//host/share`
+  // 变成 `host/share`，之后任何 ^// 或 ^\\ 的判据都失效。
+  if (String(path).replace(/\\/g, '/').startsWith('//')) return 'UNC'
   const p = collapse(path).toLowerCase()
   for (const r of RULES) if (r.re.test(p)) return r.code
   return null

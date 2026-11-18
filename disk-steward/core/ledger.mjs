@@ -14,10 +14,19 @@ export function appendLedger(path, row) {
 
 export function readLedger(path) {
   if (!existsSync(path)) return []
-  return readFileSync(path, 'utf8')
-    .split('\n')
-    .filter((l) => l.trim())
-    .map((l) => JSON.parse(l))
+  const out = []
+  // 一条坏行不该拖垮整批：undo / purgeBatch / quarantineStats 都建立在这上面，
+  // 抛错等于"台账里有一行坏了，整批操作永久不可用"。
+  // 坏行以 action:'corrupt' 现身（可见、可排查），但不会被当成有效记录参与判定。
+  for (const line of readFileSync(path, 'utf8').split('\n')) {
+    if (!line.trim()) continue
+    try {
+      out.push(JSON.parse(line))
+    } catch {
+      out.push({ action: 'corrupt', raw: line.slice(0, 200) })
+    }
+  }
+  return out
 }
 
 export function newToken() {

@@ -26,7 +26,7 @@
 | 分级 | `green`（纯缓存，重建即可）/ `yellow`（会触发重建成本）/ `brown`（受保护，永不执行） |
 | 两阶段执行 | `stage` 移入隔离区（可撤销）→ 人工确认后 `purge` 永久删除 |
 | 台账 | append-only `ledger.jsonl`，每项记录 `from`/`to`/字节数/批准来源，可按批次反演 |
-| 硬禁区 | 9 类路径（`WINDOWS_DIR`、`PROGRAM_FILES`、`PROGRAMDATA`、`USER_DOCS`、`PAGE_HIBER`、`RECYCLE_BIN`、`VSS`、`CRYPTO`、`WINSXS`）走 realpath 复核后拒绝 |
+| 硬禁区 | 10 类路径（`WINDOWS_DIR`、`PROGRAM_FILES`、`PROGRAMDATA`、`USER_DOCS`、`PAGE_HIBER`、`RECYCLE_BIN`、`VSS`、`CRYPTO`、`WINSXS`、`UNC`）走 realpath 复核后拒绝 |
 | 前置条件 | 进程未运行 / 服务已停止 / 文件不存在才允许执行，无法判定即 fail-closed |
 
 ## 架构
@@ -56,7 +56,7 @@ flowchart TB
 ```bash
 cd disk-steward
 
-# 测试：247 用例 / 53 个文件
+# 测试：259 用例 / 58 个文件
 npm test                        # 等价于 node --test
 node --test test/w36.test.mjs   # 单文件
 
@@ -104,7 +104,7 @@ disk-steward/
   render/                  # 文本面板、TUI 状态机、确认页、Markdown 报告
   rules/tianshu.rules.json # 天枢域规则（白名单）
   bin/                     # scan.mjs / tui.mjs / purge.mjs
-  test/                    # 247 用例 / 53 个文件
+  test/                    # 259 用例 / 58 个文件
   dist/                    # 发行目录，由 scripts/pack-release.mjs 生成（不入库）
 docs/                      # 架构设计、生态调研、边界对照
 ```
@@ -113,7 +113,7 @@ docs/                      # 架构设计、生态调研、边界对照
 
 | 项 | 数值 | 怎么核 |
 |---|---|---|
-| 测试 | **247 用例 / 53 个文件，全绿**（`pass 247 / fail 0`，约 184s） | `npm test` |
+| 测试 | **259 用例 / 58 个文件，全绿**（`pass 259 / fail 0`，约 140s） | `npm test` |
 | 工具 | **9** 个 | `createTools().length` |
 | 规则 | 天枢域 **21** 条（stage 12 / compact 2 / protected 7）、系统域 **35** 条 | `rules/tianshu.rules.json`、`domains/system.mjs` |
 | 硬禁区 | **9** 类 | `core/guard.mjs` 的 `DENY` |

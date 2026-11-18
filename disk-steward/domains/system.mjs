@@ -361,7 +361,7 @@ export function systemVars(env = process.env) {
   }
 }
 
-export async function scanSystem({ env = process.env, now = Date.now(), probe = false, execEnabled = false } = {}) {
+export async function scanSystem({ env = process.env, now = Date.now(), probe = false, execEnabled = false, deadline = Infinity } = {}) {
   const vars = systemVars(env)
   const denied = []
   const rules = []
@@ -394,7 +394,7 @@ export async function scanSystem({ env = process.env, now = Date.now(), probe = 
     rules.push(r)
   }
 
-  const run = await buildRun({ rules, vars, now, collectUnmatched: false })
+  const run = await buildRun({ rules, vars, now, collectUnmatched: false, deadline })
   const items = []
   for (const item of run.items) {
     // 兜底：即使规则没被拦，命中禁区也不进清单

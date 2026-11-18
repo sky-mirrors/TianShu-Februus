@@ -29,7 +29,7 @@
 | 项 | 数值 | 怎么核 |
 |---|---|---|
 | 工具 | **9** 个 | `createTools().length`；名字见「工具面」节 |
-| 测试 | **247 用例 / 53 个文件**，全绿 | `npm test`（`scripts.test = node --test`），exit 0，约 184s |
+| 测试 | **259 用例 / 58 个文件**，全绿 | `npm test`（`scripts.test = node --test`），exit 0，约 140s |
 | 类型检查 | `tsc --noEmit` **exit 0** | `../node_modules/.bin/tsc --noEmit` |
 | 规则 | 天枢域 **21** 条、系统域 **35** 条 | `rules/tianshu.rules.json`、`domains/system.mjs` |
 | 硬禁区 | **9** 类（`core/guard.mjs` 的 `DENY`） | 逐条见「安全模型」节 |
@@ -45,7 +45,7 @@
 工作目录 `disk-steward/`。运行代码零依赖；类型检查依赖仓库根的 `typescript` 与 `@types/node`。要求 Node.js >= 22（`engines`；引用图用 `node:sqlite`，盘符枚举用 `fs.statfs`）。
 
 ```bash
-# 测试（247 用例 / 53 文件）
+# 测试（259 用例 / 58 文件）
 npm test                       # 等价于 node --test
 node --test test/w36.test.mjs  # 单文件
 
@@ -126,7 +126,7 @@ purge：永久删除，只限本批次已 staged 的项
 - **令牌**：`createPlan` 签发，10 分钟 TTL；`stage` 与 `purge` 都校验令牌与过期时间，令牌一次性。
 - **人工批准**：`stage` / `purge` / `purgeBatch` 要求 `issuer === 'human'` 且 `confirmedBy` 非空。工具面通过 `disk_exec` 的 `approval` 取得这一事实；TUI 与 `bin/purge.mjs` 由本地键入提供。
 - **计划拒绝条件**（`core/plan.mjs`）：保护项（brown）/ 无执行器 / 非 `stage|migrate` / 被挡（`active`、`precondition`、`excluded`）/ **引用结论已过期**（`refsStaleSeconds > 0`）。
-- **硬禁区**（`core/guard.mjs`，9 类，优先级高于规则库与用户决定）：Windows 系统目录、`Program Files*`、`ProgramData`、用户个人目录（文档/桌面/图片/视频/音乐/下载/OneDrive/AppData\Roaming）、`pagefile.sys`/`hiberfil.sys`/`swapfile.sys`、`$Recycle.Bin`、`System Volume Information`（卷影副本）、任意层 `WinSxS`、`Crypto\Keys` / `Microsoft\Protect`。字符串判定之外，执行前还会 `realpath` 解析真实路径再判一次（堵软链/junction）。
+- **硬禁区**（`core/guard.mjs`，10 类，优先级高于规则库与用户决定）：Windows 系统目录、`Program Files*`、`ProgramData`、用户个人目录（文档/桌面/图片/视频/音乐/下载/OneDrive/AppData\Roaming）、`pagefile.sys`/`hiberfil.sys`/`swapfile.sys`、`$Recycle.Bin`、`System Volume Information`（卷影副本）、任意层 `WinSxS`、`Crypto\Keys` / `Microsoft\Protect`、UNC 网络路径（`\\host\share`，在路径归一化**之前**判——否则前导 `//` 会先被吃掉）。字符串判定之外，执行前还会 `realpath` 解析真实路径再判一次（堵软链/junction）。
 - **活跃窗口**：10 分钟内有写入（`mtimeGuard`）的项标记 `blocked: 'active'`，不进计划。
 - **前置条件 fail-closed**：`processNotRunning` / `serviceStopped` / `fileExists` 不满足即阻塞；不认识的类型一律不通过。
 - **执行期重验**：stage 前对每个目标取 dev+ino+size+mtime 快照，与扫描时对比；移动后再比一次，不符即回滚并记 `abort`。
@@ -356,7 +356,7 @@ disk-steward/
     rules.mjs              # 规则校验（brown 不得有 executor、reason 必填、flags 白名单）
     run.mjs                # 一次扫描 = 一份 run（detect/exclude/去重/unmatched/隐私）
     refindex.mjs           # 引用图（扫不全不判可回收，60s 增量缓存）
-    guard.mjs              # 硬禁区（9 类 + realpath 复核）
+    guard.mjs              # 硬禁区（10 类 + realpath 复核）
     precondition.mjs       # 进程/服务/文件前置（fail-closed）
     plan.mjs               # 计划、一次性令牌、isStageable 唯一判据
     executor.mjs           # stage/purge/undo/recoverBatch/purgeBatch/quarantine*
@@ -382,7 +382,7 @@ disk-steward/
     tui.mjs                # 交互面板（--allow-exec / --only-project / --with-system / --script）
     purge.mjs              # 隔离区人工释放（--batch / --yes / --by）
     recover.mjs            # 崩溃后补齐台账终态（--batch；不给则列出未决批次）
-  test/                    # 53 个测试文件 / 247 用例
+  test/                    # 58 个测试文件 / 259 用例
 ```
 
 ---

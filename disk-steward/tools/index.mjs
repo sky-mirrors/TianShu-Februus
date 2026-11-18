@@ -1,5 +1,5 @@
 // TPI 工具面：只有读与规划，没有执行（不变量 I4）。执行留给 W2 的 disk_exec。
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, statSync, unlinkSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { pluginStatePaths, defaultHostDataDir } from '../core/paths.mjs'
@@ -59,6 +59,10 @@ export function createTools(deps = {}) {
       timeoutMs: 60000,
       async execute(call) {
         const min = Number(call?.args?.minBytes ?? 1048576)
+        // 整盘扫描是唯一有用户可给时限的入口：这个预算必须约束**整个调用**
+        // （system 域 35 条规则实测 51.5s，原先一点预算都不受，导致 20s 预算跑出 84.4s）
+        const budgetMs = Number(call?.args?.sweepBudgetMs ?? 120000)
+        const deadline = Date.now() + budgetMs
         // 清哪一侧由用户决定：不提供默认值。缺省直接拒绝，逼调用方先去问。
         // fullDrive 是另一套口径（整盘），此时 domain 只用于摘要标注。
         const domain = call?.args?.domain ?? (call?.args?.fullDrive === undefined ? null : 'both')
@@ -89,17 +93,22 @@ export function createTools(deps = {}) {
           vars,
           // 增量索引：指纹命中或 60s 内复用；过期秒数会写进 item，plan 层据此拒绝
           refIndexDeps: { cachePath: join(state, 'refcache.json'), ttlMs: 60000 },
+          deadline,
         })
 
         // 整盘扫描不分域：全盘口径下系统缓存（Edge/Temp 等）就是盘里的东西，
         // 而它们的真实路径在第 7~10 层，靠加深 sweep 深度去够代价是分钟级——
         // 系统域本来就直接测这些白名单目标，所以 fullDrive 时一并纳入。
+        // 整盘扫描时 system 域只吃一半预算：35 条规则的系统域会先耗尽预算，
+        // 让真正的整盘 sweep 扫不到任何目录（实测 20s 预算下 sweep 只扫了 1 个目录）
+        const sysDeadline = call?.args?.fullDrive === undefined ? deadline : Date.now() + Math.floor(budgetMs / 2)
         const sys = domain === 'tianshu' && call?.args?.fullDrive === undefined
           ? null
-          : await scanSystem({ execEnabled: call?.args?.systemExec === true })
+          : await scanSystem({ execEnabled: call?.args?.systemExec === true, deadline: sysDeadline })
         const extra = sys
           ? `\n[系统域] ${sys.items.length} 项 / ${fmtBytes(sys.totals.bytes)}，可执行项需 disk_plan + 人工批准；` +
             `禁区拦截 ${sys.denied.length} 条` +
+            (sys.truncated ? '｜预算已用尽（部分目录只测了一半）' : '') +
             (sys.denied.length ? '：' + sys.denied.map((d) => d.reason.split(':')[0]).join('、') : '')
           : ''
         const driveScan = call?.args?.allDrives === true
@@ -137,7 +146,9 @@ export function createTools(deps = {}) {
               // 整盘扫描要同时用两套规则：只给天枢规则会让 C:\tmp 这类系统目录落进「未收录」
               rules: [...rules, ...systemRules()],
               vars: { ...vars, ...systemVars() },
-              budgetMs: Number(call.args.sweepBudgetMs ?? 120000),
+              // 传剩余预算：sweepDrive 内部按「自己开始时刻 + budgetMs」算 deadline，
+              // 直接传总预算会让总耗时变成 system 域 + 预算
+              budgetMs: Math.max(0, deadline - Date.now()),
             })
           : null
         // 整盘画像也要落盘：否则只能活在一屏终端输出里——不能归档，也不能与下次扫描对比
@@ -463,6 +474,28 @@ export function mergeDomainRun({ run, sys = null, domain }) {
 function saveRun(dir, run) {
   mkdirSync(dir, { recursive: true })
   writeFileSync(join(dir, `${run.runId}.json`), JSON.stringify(run, null, 1))
+  pruneRuns(dir)
+}
+
+// run 落盘保留上限：每次扫描 +1 个约 25KB 的文件，不轮转就会无限长
+export const RUN_KEEP = 50
+
+/**
+ * 只留最近 keep 个 run 文件（按 mtime），非 run 文件（refcache.json 等）不受影响。
+ * @param {string} dir @param {number} [keep]
+ */
+export function pruneRuns(dir, keep = RUN_KEEP) {
+  let files
+  try {
+    files = readdirSync(dir).filter((f) => f.startsWith('r-') && f.endsWith('.json'))
+  } catch {
+    return
+  }
+  if (files.length <= keep) return
+  const byAge = files
+    .map((f) => ({ f, t: statSync(join(dir, f)).mtimeMs }))
+    .sort((a, b) => a.t - b.t)
+  for (const { f } of byAge.slice(0, files.length - keep)) unlinkSync(join(dir, f))
 }
 
 function loadRun(dir, runId) {
